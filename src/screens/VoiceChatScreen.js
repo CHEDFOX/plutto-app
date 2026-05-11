@@ -268,7 +268,7 @@ export default function VoiceChatScreen({ onClose, onConversationUpdate, kundliD
   // Set to false on close/mode-switch. Pipeline checks this before playing audio.
   const isActiveRef = useRef(true);
 
-  const transition = (target, duration = 800, easing = Easing.inOut(Easing.cubic)) => {
+  const transition = (target, duration = 800, easing = Easing.bezier(0.42, 0, 0.58, 1)) => {
     return Animated.timing(driver, {
       toValue: target,
       duration,
@@ -282,8 +282,8 @@ export default function VoiceChatScreen({ onClose, onConversationUpdate, kundliD
     wanderDriver.setValue(0);
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(wanderDriver, { toValue: 1, duration: 8000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(wanderDriver, { toValue: 0, duration: 8000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(wanderDriver, { toValue: 1, duration: 8000, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
+        Animated.timing(wanderDriver, { toValue: 0, duration: 8000, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
       ])
     );
     loop.start();
@@ -304,7 +304,7 @@ export default function VoiceChatScreen({ onClose, onConversationUpdate, kundliD
       Animated.timing(breathDriver, {
         toValue: 1,
         duration: 5000,   // 5 sec full breath cycle (inhale+exhale)
-        easing: Easing.inOut(Easing.sin),
+        easing: Easing.bezier(0.37, 0, 0.63, 1),
         useNativeDriver: true,
       })
     );
@@ -431,7 +431,7 @@ export default function VoiceChatScreen({ onClose, onConversationUpdate, kundliD
     } catch (e) {}
 
     // Disperse particles out across screen
-    transition(2, 900, Easing.out(Easing.quad)).start(() => {
+    transition(2, 900, Easing.bezier(0.5, 1, 0.89, 1)).start(() => {
       setState(STATE.WAITING);
       startWander();
     });
@@ -526,7 +526,7 @@ export default function VoiceChatScreen({ onClose, onConversationUpdate, kundliD
       // Audio is now playing — slowly reform sphere, then start speaking wave
       stopWander();
       setState(STATE.REFORMING);
-      transition(0, 4500, Easing.out(Easing.quad)).start(() => {
+      transition(0, 4500, Easing.bezier(0.5, 1, 0.89, 1)).start(() => {
         setState(STATE.SPEAKING);
         startSpeak();
       });
@@ -568,7 +568,7 @@ export default function VoiceChatScreen({ onClose, onConversationUpdate, kundliD
       stopWander();
       if (!isActiveRef.current) { isProcessing.current = false; return; }
       setState(STATE.REFORMING);
-      transition(0, 4500, Easing.out(Easing.cubic)).start(() => {
+      transition(0, 4500, Easing.bezier(0, 0, 0.2, 1)).start(() => {
         isProcessing.current = false;
         if (isActiveRef.current) startRecording();
       });
@@ -577,7 +577,7 @@ export default function VoiceChatScreen({ onClose, onConversationUpdate, kundliD
       stopSpeak();
       if (!isActiveRef.current) return;
       setState(STATE.REFORMING);
-      transition(0, 900, Easing.out(Easing.cubic)).start(() => {
+      transition(0, 900, Easing.bezier(0, 0, 0.2, 1)).start(() => {
         isProcessing.current = false;
         if (isActiveRef.current) startRecording();
       });

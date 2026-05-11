@@ -75,7 +75,7 @@ const GunaCircle = ({ score, maxScore = 36, onComplete }) => {
         Animated.timing(anim, {
           toValue: i < score ? 1 : 0.15,
           duration: 200,
-          easing: Easing.out(Easing.ease),
+          easing: Easing.bezier(0, 0, 0.58, 1),
           useNativeDriver: true,
         }).start();
       }, i * stagger);
@@ -88,7 +88,7 @@ const GunaCircle = ({ score, maxScore = 36, onComplete }) => {
 
     // Fade out circle after 5 seconds
     setTimeout(() => {
-      Animated.timing(circleOpacity, { toValue: 0, duration: 600, easing: Easing.in(Easing.ease), useNativeDriver: true }).start(() => {
+      Animated.timing(circleOpacity, { toValue: 0, duration: 600, easing: Easing.bezier(0.42, 0, 1, 1), useNativeDriver: true }).start(() => {
         if (onComplete) onComplete();
       });
     }, maxScore * stagger + 5000);

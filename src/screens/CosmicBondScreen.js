@@ -34,7 +34,7 @@ const ResonanceChart = ({ kootas, total, maxScore, percentage, onDone }) => {
   useEffect(() => {
     // Stagger-fill each segment
     const sequence = anims.map((a, i) =>
-      Animated.timing(a, { toValue: 1, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: false })
+      Animated.timing(a, { toValue: 1, duration: 400, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: false })
     );
     Animated.stagger(150, [
       ...sequence,

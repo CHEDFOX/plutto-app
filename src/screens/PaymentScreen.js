@@ -78,13 +78,13 @@ const WelcomeReveal = ({ words, onComplete, language }) => {
           Animated.timing(wordAnims[i].opacity, {
             toValue: 1,
             duration: 500,
-            easing: Easing.out(Easing.ease),
+            easing: Easing.bezier(0, 0, 0.58, 1),
             useNativeDriver: true,
           }),
           Animated.timing(wordAnims[i].translateY, {
             toValue: 0,
             duration: 500,
-            easing: Easing.out(Easing.ease),
+            easing: Easing.bezier(0, 0, 0.58, 1),
             useNativeDriver: true,
           }),
         ]).start();
@@ -103,25 +103,25 @@ const WelcomeReveal = ({ words, onComplete, language }) => {
           Animated.timing(wordAnims[i].opacity, {
             toValue: 0,
             duration: 1000,
-            easing: Easing.in(Easing.ease),
+            easing: Easing.bezier(0.42, 0, 1, 1),
             useNativeDriver: true,
           }),
           Animated.timing(wordAnims[i].translateX, {
             toValue: randomX,
             duration: 1200,
-            easing: Easing.in(Easing.ease),
+            easing: Easing.bezier(0.42, 0, 1, 1),
             useNativeDriver: true,
           }),
           Animated.timing(wordAnims[i].translateY, {
             toValue: randomY,
             duration: 1200,
-            easing: Easing.in(Easing.ease),
+            easing: Easing.bezier(0.42, 0, 1, 1),
             useNativeDriver: true,
           }),
           Animated.timing(wordAnims[i].scale, {
             toValue: 0.6,
             duration: 1200,
-            easing: Easing.in(Easing.ease),
+            easing: Easing.bezier(0.42, 0, 1, 1),
             useNativeDriver: true,
           }),
         ]);
@@ -206,7 +206,7 @@ export default function PaymentScreen({ onComplete, language = 'en' }) {
       Animated.timing(keyRotation, {
         toValue: 1,
         duration: 800,
-        easing: Easing.out(Easing.cubic),
+        easing: Easing.bezier(0, 0, 0.2, 1),
         useNativeDriver: true,
       }).start(() => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -217,7 +217,7 @@ export default function PaymentScreen({ onComplete, language = 'en' }) {
             Animated.timing(buttonDrop, {
               toValue: 1,
               duration: 500,
-              easing: Easing.in(Easing.quad),
+              easing: Easing.bezier(0.11, 0, 0.5, 0),
               useNativeDriver: true,
             }),
             Animated.timing(fadeAnim, {

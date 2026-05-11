@@ -40,6 +40,7 @@ const SYSTEMS = [
   { id: 'western', label: 'Western' },
   { id: 'chinese', label: 'Chinese' },
   { id: 'num',     label: 'Numerology' },
+  { id: 'mandala', label: 'Mandala' },
 ];
 
 const COUNT = SYSTEMS.length;
@@ -48,11 +49,11 @@ const MID_START = COUNT;
 const INITIAL_OFFSET = MID_START * ITEM_WIDTH;
 
 const SYSTEM_IMAGES = {
-  bphs:    require('../../assets/systems/system_vedic.png'),
-  kp:      require('../../assets/systems/system_kp.png'),
-  western: require('../../assets/systems/system_western.png'),
-  chinese: require('../../assets/systems/system_chinese.png'),
-  num:     require('../../assets/systems/system_numerology.png'),
+  bphs:    { uri: 'https://api.plutto.space/static/systems/system_vedic.png' },
+  kp:      { uri: 'https://api.plutto.space/static/systems/system_kp.png' },
+  western: { uri: 'https://api.plutto.space/static/systems/system_western.png' },
+  chinese: { uri: 'https://api.plutto.space/static/systems/system_chinese.png' },
+  num:     { uri: 'https://api.plutto.space/static/systems/system_numerology.png' },
 };
 
 const ITEMS = [];
@@ -108,13 +109,13 @@ export default function ArcSelector({ activeSystem = 'bphs', onSystemChange, onA
       Animated.timing(imgOpacity, {
         toValue: 0,
         duration: 250,
-        easing: Easing.in(Easing.cubic),
+        easing: Easing.bezier(0.4, 0, 1, 1),
         useNativeDriver: true,
       }),
       Animated.timing(imgScale, {
         toValue: 1.03,
         duration: 250,
-        easing: Easing.in(Easing.cubic),
+        easing: Easing.bezier(0.4, 0, 1, 1),
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -127,7 +128,7 @@ export default function ArcSelector({ activeSystem = 'bphs', onSystemChange, onA
         Animated.timing(imgOpacity, {
           toValue: 1,
           duration: 450,
-          easing: Easing.out(Easing.cubic),
+          easing: Easing.bezier(0, 0, 0.2, 1),
           useNativeDriver: true,
         }),
         Animated.spring(imgScale, {

@@ -339,11 +339,11 @@ export default function AuthScreen({ onComplete, onBack, language = 'en' }) {
             const delay = i * 80;
             return Animated.parallel([
               Animated.sequence([
-                Animated.timing(elementScales[i], { toValue: 1.5, duration: 300, delay, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-                Animated.timing(elementScales[i], { toValue: 0.3, duration: 400, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+                Animated.timing(elementScales[i], { toValue: 1.5, duration: 300, delay, easing: Easing.bezier(0, 0, 0.58, 1), useNativeDriver: true }),
+                Animated.timing(elementScales[i], { toValue: 0.3, duration: 400, easing: Easing.bezier(0.42, 0, 1, 1), useNativeDriver: true }),
               ]),
-              Animated.timing(elementTranslateY[i], { toValue: -30, duration: 700, delay, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-              Animated.timing(elementOpacities[i], { toValue: 0, duration: 500, delay: delay + 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+              Animated.timing(elementTranslateY[i], { toValue: -30, duration: 700, delay, easing: Easing.bezier(0, 0, 0.58, 1), useNativeDriver: true }),
+              Animated.timing(elementOpacities[i], { toValue: 0, duration: 500, delay: delay + 200, easing: Easing.bezier(0.42, 0, 1, 1), useNativeDriver: true }),
             ]);
           });
 

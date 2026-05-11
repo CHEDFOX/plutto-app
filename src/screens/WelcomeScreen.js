@@ -21,7 +21,7 @@ export default function WelcomeScreen({ language, userName, onComplete }) {
 
   useEffect(() => {
     Animated.sequence([
-      Animated.timing(starsOp, { toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(starsOp, { toValue: 1, duration: 800, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: true }),
       Animated.delay(400),
       Animated.spring(disperse, { toValue: 1, tension: 8, friction: 12, useNativeDriver: true }),
       Animated.delay(200),

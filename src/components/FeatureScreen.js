@@ -62,7 +62,7 @@ export default function FeatureScreen({ featureId, visible, onClose }) {
       }
     } else {
       Animated.parallel([
-        Animated.timing(slideAnim, { toValue: SH, duration: 250, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: SH, duration: 250, easing: Easing.bezier(0.4, 0, 1, 1), useNativeDriver: true }),
         Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
       ]).start();
     }

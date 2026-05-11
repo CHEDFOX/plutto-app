@@ -118,8 +118,8 @@ const SoulMap = ({ soulProfile, language = 'en' }) => {
   const breathAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const b = Animated.loop(Animated.sequence([
-      Animated.timing(breathAnim, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
-      Animated.timing(breathAnim, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+      Animated.timing(breathAnim, { toValue: 1, duration: 2000, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: false }),
+      Animated.timing(breathAnim, { toValue: 0, duration: 2000, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: false }),
     ]));
     b.start();
     return () => b.stop();
@@ -145,7 +145,7 @@ const SoulMap = ({ soulProfile, language = 'en' }) => {
           particleAnims[i].setValue(0);
           particleOpacities[i].setValue(0);
           Animated.parallel([
-            Animated.timing(particleAnims[i], { toValue: 1, duration: 6000, easing: Easing.out(Easing.ease), useNativeDriver: false }),
+            Animated.timing(particleAnims[i], { toValue: 1, duration: 6000, easing: Easing.bezier(0, 0, 0.58, 1), useNativeDriver: false }),
             Animated.sequence([
               Animated.timing(particleOpacities[i], { toValue: 1, duration: 500, useNativeDriver: false }),
               Animated.delay(4000),
@@ -207,7 +207,7 @@ const SoulMap = ({ soulProfile, language = 'en' }) => {
       particleAnims[idx].setValue(0);
       particleOpacities[idx].setValue(1);
       Animated.parallel([
-        Animated.timing(particleAnims[idx], { toValue: 1, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(particleAnims[idx], { toValue: 1, duration: 400, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: false }),
         Animated.sequence([
           Animated.delay(300),
           Animated.timing(particleOpacities[idx], { toValue: 0, duration: 200, useNativeDriver: false }),
@@ -239,7 +239,7 @@ const SoulMap = ({ soulProfile, language = 'en' }) => {
         setTimeout(() => {
           particleAnims[i].setValue(0); particleOpacities[i].setValue(1);
           Animated.parallel([
-            Animated.timing(particleAnims[i], { toValue: 1, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+            Animated.timing(particleAnims[i], { toValue: 1, duration: 400, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: false }),
             Animated.sequence([Animated.delay(300), Animated.timing(particleOpacities[i], { toValue: 0, duration: 200, useNativeDriver: false })]),
           ]).start();
           Animated.timing(wordOpacities[i], { toValue: 0, duration: 200, useNativeDriver: false }).start(() => {
@@ -269,16 +269,16 @@ const SoulMap = ({ soulProfile, language = 'en' }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Gold flash
     centerGold.setValue(1);
-    Animated.timing(centerGold, { toValue: 0, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(centerGold, { toValue: 0, duration: 800, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: false }).start();
     // Scale bounce
     Animated.sequence([
       Animated.timing(centerScale, { toValue: 0.7, duration: 80, useNativeDriver: false }),
-      Animated.timing(centerScale, { toValue: 1.15, duration: 150, easing: Easing.out(Easing.ease), useNativeDriver: false }),
+      Animated.timing(centerScale, { toValue: 1.15, duration: 150, easing: Easing.bezier(0, 0, 0.58, 1), useNativeDriver: false }),
       Animated.timing(centerScale, { toValue: 1, duration: 100, useNativeDriver: false }),
     ]).start();
     lightWave.setValue(0); lightOpacity.setValue(1);
     Animated.parallel([
-      Animated.timing(lightWave, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(lightWave, { toValue: 1, duration: 600, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: false }),
       Animated.sequence([
         Animated.timing(lightOpacity, { toValue: 0.4, duration: 150, useNativeDriver: false }),
         Animated.timing(lightOpacity, { toValue: 0, duration: 450, useNativeDriver: false }),

@@ -8,7 +8,7 @@
     "userInterfaceStyle": "dark",
     "icon": "./assets/icon.png",
     "splash": {
-  "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -46,7 +46,8 @@
         }
       ],
       "expo-font",
-      "expo-localization"
+      "expo-localization",
+      "expo-video"
     ],
     "extra": {
       "eas": {

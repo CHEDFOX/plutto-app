@@ -79,16 +79,16 @@ const BOX = { width: SZ, height: SZ, justifyContent: 'center', alignItems: 'cent
 function AnimHorizon() {
   const y = useRef(new Animated.Value(8)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(y, { toValue: -8, duration: 2500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    Animated.timing(y, { toValue: 8, duration: 2500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    Animated.timing(y, { toValue: -8, duration: 2500, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
+    Animated.timing(y, { toValue: 8, duration: 2500, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
   ])).start(); }, []);
   return <View style={BOX}><View style={{ position:'absolute', top: 34, left: 6, right: 6, height: 0.8, backgroundColor: G }}/><Animated.View style={{ position:'absolute', width: 16, height: 16, borderRadius: 8, borderWidth: 0.8, borderColor: G, transform:[{translateY:y}] }}/></View>;
 }
 function AnimSundial() {
   const rot = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(rot, { toValue: 1, duration: 3000, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-    Animated.timing(rot, { toValue: 0, duration: 3000, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    Animated.timing(rot, { toValue: 1, duration: 3000, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
+    Animated.timing(rot, { toValue: 0, duration: 3000, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
   ])).start(); }, []);
   const r = rot.interpolate({ inputRange:[0,1], outputRange:['-60deg','60deg'] });
   return <View style={BOX}><View style={{ position:'absolute', bottom: 8, left: 6, right: 6, height: 0.5, backgroundColor: GD }}/><View style={{ position:'absolute', bottom: 8, width: SZ-12, height: SZ/2, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderWidth: 0.8, borderColor: G, borderBottomWidth: 0 }}/><Animated.View style={{ position:'absolute', bottom: 8, width: 0.8, height: 24, backgroundColor: G, transformOrigin: 'bottom', transform:[{rotate:r}] }}/></View>;
@@ -97,17 +97,17 @@ function AnimStar() {
   const s = useRef(new Animated.Value(0.6)).current;
   const o = useRef(new Animated.Value(0.3)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.parallel([Animated.timing(s,{toValue:1.2,duration:1500,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),Animated.timing(o,{toValue:1,duration:1500,useNativeDriver:true})]),
-    Animated.parallel([Animated.timing(s,{toValue:0.6,duration:1500,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),Animated.timing(o,{toValue:0.3,duration:1500,useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(s,{toValue:1.2,duration:1500,easing:Easing.bezier(0.37, 0, 0.63, 1),useNativeDriver:true}),Animated.timing(o,{toValue:1,duration:1500,useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(s,{toValue:0.6,duration:1500,easing:Easing.bezier(0.37, 0, 0.63, 1),useNativeDriver:true}),Animated.timing(o,{toValue:0.3,duration:1500,useNativeDriver:true})]),
   ])).start(); }, []);
   return <View style={BOX}><Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: G, opacity: o, transform:[{scale:s}], shadowColor: G, shadowOpacity: 0.8, shadowRadius: 12, shadowOffset:{width:0,height:0} }}/></View>;
 }
 function AnimMoon() {
   const x = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(x, { toValue: -(SZ+4), duration: 4000, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    Animated.timing(x, { toValue: -(SZ+4), duration: 4000, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
     Animated.delay(500),
-    Animated.timing(x, { toValue: 0, duration: 3500, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    Animated.timing(x, { toValue: 0, duration: 3500, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
     Animated.delay(500),
   ])).start(); }, []);
   return <View style={[BOX, { borderRadius: SZ/2, overflow:'hidden' }]}><View style={{ width: SZ*0.6, height: SZ*0.6, borderRadius: SZ*0.3, backgroundColor: G, opacity: 0.35 }}/><Animated.View style={{ position:'absolute', width: SZ, height: SZ, borderRadius: SZ/2, backgroundColor:'#030308', transform:[{translateX:x}] }}/></View>;
@@ -133,11 +133,11 @@ function AnimDiya() {
 function AnimEclipse() {
   const x = useRef(new Animated.Value(-20)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(x, { toValue: 6, duration: 3000, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-    Animated.timing(x, { toValue: 28, duration: 2500, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    Animated.timing(x, { toValue: 6, duration: 3000, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
+    Animated.timing(x, { toValue: 28, duration: 2500, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
     Animated.delay(400),
-    Animated.timing(x, { toValue: 6, duration: 2500, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-    Animated.timing(x, { toValue: -20, duration: 3000, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    Animated.timing(x, { toValue: 6, duration: 2500, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
+    Animated.timing(x, { toValue: -20, duration: 3000, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
     Animated.delay(800),
   ])).start(); }, []);
   return <View style={[BOX, { overflow:'hidden' }]}><View style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 0.8, borderColor: G }}/><Animated.View style={{ position:'absolute', width: 30, height: 30, borderRadius: 15, backgroundColor:'#030308', borderWidth: 0.5, borderColor: GD, transform:[{translateX:x}] }}/></View>;
@@ -151,9 +151,9 @@ function AnimWheel() {
 function AnimScroll() {
   const h = useRef(new Animated.Value(4)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(h, { toValue: 36, duration: 2000, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    Animated.timing(h, { toValue: 36, duration: 2000, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: false }),
     Animated.delay(1000),
-    Animated.timing(h, { toValue: 4, duration: 1500, easing: Easing.in(Easing.cubic), useNativeDriver: false }),
+    Animated.timing(h, { toValue: 4, duration: 1500, easing: Easing.bezier(0.4, 0, 1, 1), useNativeDriver: false }),
     Animated.delay(500),
   ])).start(); }, []);
   return <View style={BOX}><Animated.View style={{ width: 24, height: h, borderWidth: 0.8, borderColor: G, borderRadius: 2 }}><View style={{ marginTop: 5, marginLeft: 4, width: 10, height: 0.5, backgroundColor: GD }}/><View style={{ marginTop: 3, marginLeft: 4, width: 12, height: 0.5, backgroundColor: GD }}/></Animated.View></View>;
@@ -161,17 +161,17 @@ function AnimScroll() {
 function AnimCoin() {
   const sx = useRef(new Animated.Value(1)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(sx, { toValue: 0.1, duration: 900, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-    Animated.timing(sx, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    Animated.timing(sx, { toValue: 0.1, duration: 900, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
+    Animated.timing(sx, { toValue: 1, duration: 900, easing: Easing.bezier(0.42, 0, 0.58, 1), useNativeDriver: true }),
   ])).start(); }, []);
   return <View style={BOX}><Animated.View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 0.8, borderColor: G, transform:[{scaleX:sx}], justifyContent:'center', alignItems:'center' }}><View style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 0.3, borderColor: GD }}/></Animated.View></View>;
 }
 function AnimBell() {
   const rot = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(rot, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    Animated.timing(rot, { toValue: -1, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    Animated.timing(rot, { toValue: 0, duration: 600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    Animated.timing(rot, { toValue: 1, duration: 800, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
+    Animated.timing(rot, { toValue: -1, duration: 800, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
+    Animated.timing(rot, { toValue: 0, duration: 600, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
     Animated.delay(400),
   ])).start(); }, []);
   const r = rot.interpolate({ inputRange:[-1,0,1], outputRange:['-12deg','0deg','12deg'] });
@@ -187,8 +187,8 @@ function AnimYogas() {
   const s = useRef(new Animated.Value(0.7)).current;
   const r = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.parallel([Animated.timing(s,{toValue:1.15,duration:2000,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),Animated.timing(r,{toValue:1,duration:4000,easing:Easing.linear,useNativeDriver:true})]),
-    Animated.parallel([Animated.timing(s,{toValue:0.7,duration:2000,easing:Easing.inOut(Easing.sin),useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(s,{toValue:1.15,duration:2000,easing:Easing.bezier(0.37, 0, 0.63, 1),useNativeDriver:true}),Animated.timing(r,{toValue:1,duration:4000,easing:Easing.linear,useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(s,{toValue:0.7,duration:2000,easing:Easing.bezier(0.37, 0, 0.63, 1),useNativeDriver:true})]),
   ])).start(); }, []);
   const rot = r.interpolate({ inputRange:[0,1], outputRange:['0deg','120deg'] });
   return <View style={BOX}><Animated.View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 0.8, borderColor: G, transform:[{scale:s},{rotate:rot}], justifyContent:'center', alignItems:'center' }}><View style={{ position:'absolute', width: 0.5, height: 28, backgroundColor: GD }}/><View style={{ position:'absolute', width: 0.5, height: 28, backgroundColor: GD, transform:[{rotate:'60deg'}] }}/><View style={{ position:'absolute', width: 0.5, height: 28, backgroundColor: GD, transform:[{rotate:'120deg'}] }}/></Animated.View></View>;
@@ -196,8 +196,8 @@ function AnimYogas() {
 function AnimPulseBody() {
   const op = useRef(new Animated.Value(0.3)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(op, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    Animated.timing(op, { toValue: 0.3, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    Animated.timing(op, { toValue: 1, duration: 1200, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
+    Animated.timing(op, { toValue: 0.3, duration: 1200, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
   ])).start(); }, []);
   return <View style={BOX}><Animated.View style={{ width: 18, height: 28, borderRadius: 9, borderWidth: 0.8, borderColor: G, opacity: op }}/><View style={{ position:'absolute', top: 10, width: 12, height: 12, borderRadius: 6, borderWidth: 0.8, borderColor: G }}/></View>;
 }
@@ -205,9 +205,9 @@ function AnimRise() {
   const y = useRef(new Animated.Value(16)).current;
   const op = useRef(new Animated.Value(0.2)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.parallel([Animated.timing(y,{toValue:-8,duration:2500,easing:Easing.out(Easing.cubic),useNativeDriver:true}),Animated.timing(op,{toValue:1,duration:1500,useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(y,{toValue:-8,duration:2500,easing:Easing.bezier(0, 0, 0.2, 1),useNativeDriver:true}),Animated.timing(op,{toValue:1,duration:1500,useNativeDriver:true})]),
     Animated.delay(500),
-    Animated.parallel([Animated.timing(y,{toValue:16,duration:2000,easing:Easing.in(Easing.cubic),useNativeDriver:true}),Animated.timing(op,{toValue:0.2,duration:1500,useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(y,{toValue:16,duration:2000,easing:Easing.bezier(0.4, 0, 1, 1),useNativeDriver:true}),Animated.timing(op,{toValue:0.2,duration:1500,useNativeDriver:true})]),
     Animated.delay(300),
   ])).start(); }, []);
   return <View style={BOX}><View style={{ position:'absolute', bottom: 12, left: 10, right: 10, height: 0.5, backgroundColor: GD }}/><Animated.View style={{ width: 12, height: 18, borderWidth: 0.8, borderColor: G, borderRadius: 2, opacity: op, transform:[{translateY:y}] }}/></View>;
@@ -216,7 +216,7 @@ function AnimEclipseImpact() {
   const s = useRef(new Animated.Value(1)).current;
   const o = useRef(new Animated.Value(0.5)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.parallel([Animated.timing(s,{toValue:1.6,duration:2000,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),Animated.timing(o,{toValue:0,duration:2000,useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(s,{toValue:1.6,duration:2000,easing:Easing.bezier(0.37, 0, 0.63, 1),useNativeDriver:true}),Animated.timing(o,{toValue:0,duration:2000,useNativeDriver:true})]),
     Animated.parallel([Animated.timing(s,{toValue:1,duration:10,useNativeDriver:true}),Animated.timing(o,{toValue:0.5,duration:10,useNativeDriver:true})]),
     Animated.delay(600),
   ])).start(); }, []);
@@ -225,8 +225,8 @@ function AnimEclipseImpact() {
 function AnimNadi() {
   const x = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.timing(x, { toValue: 1, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    Animated.timing(x, { toValue: 0, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    Animated.timing(x, { toValue: 1, duration: 3000, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
+    Animated.timing(x, { toValue: 0, duration: 3000, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: true }),
   ])).start(); }, []);
   const tx = x.interpolate({ inputRange:[0,1], outputRange:[-6,6] });
   return <View style={BOX}><View style={{ width: 0.8, height: 36, backgroundColor: GD, position:'absolute' }}/><Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: G, opacity: 0.7, transform:[{translateX:tx}], shadowColor: G, shadowOpacity: 0.6, shadowRadius: 6, shadowOffset:{width:0,height:0} }}/></View>;
@@ -235,8 +235,8 @@ function AnimWeekBars() {
   const vals = useRef([0,1,2,3,4,5,6].map(()=>new Animated.Value(6+Math.random()*18))).current;
   useEffect(() => { vals.forEach((v,i) => { Animated.loop(Animated.sequence([
     Animated.delay(i*150),
-    Animated.timing(v, { toValue: 8+Math.random()*20, duration: 1500+Math.random()*1000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-    Animated.timing(v, { toValue: 6+Math.random()*14, duration: 1500+Math.random()*1000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+    Animated.timing(v, { toValue: 8+Math.random()*20, duration: 1500+Math.random()*1000, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: false }),
+    Animated.timing(v, { toValue: 6+Math.random()*14, duration: 1500+Math.random()*1000, easing: Easing.bezier(0.37, 0, 0.63, 1), useNativeDriver: false }),
   ])).start(); }); }, []);
   return <View style={[BOX, { flexDirection:'row', gap: 3, alignItems:'flex-end', paddingBottom: 10 }]}>
     {vals.map((h,i)=><Animated.View key={i} style={{ width: 3, height: h, borderRadius: 1.5, backgroundColor: i===3?G:GD }}/>)}
@@ -253,8 +253,8 @@ function AnimStarPulse() {
   const o = useRef(new Animated.Value(0.4)).current;
   const r = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.loop(Animated.sequence([
-    Animated.parallel([Animated.timing(s,{toValue:1.2,duration:1800,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),Animated.timing(o,{toValue:1,duration:1800,useNativeDriver:true}),Animated.timing(r,{toValue:1,duration:3600,easing:Easing.linear,useNativeDriver:true})]),
-    Animated.parallel([Animated.timing(s,{toValue:0.8,duration:1800,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),Animated.timing(o,{toValue:0.4,duration:1800,useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(s,{toValue:1.2,duration:1800,easing:Easing.bezier(0.37, 0, 0.63, 1),useNativeDriver:true}),Animated.timing(o,{toValue:1,duration:1800,useNativeDriver:true}),Animated.timing(r,{toValue:1,duration:3600,easing:Easing.linear,useNativeDriver:true})]),
+    Animated.parallel([Animated.timing(s,{toValue:0.8,duration:1800,easing:Easing.bezier(0.37, 0, 0.63, 1),useNativeDriver:true}),Animated.timing(o,{toValue:0.4,duration:1800,useNativeDriver:true})]),
   ])).start(); }, []);
   const rot = r.interpolate({ inputRange:[0,1], outputRange:['0deg','72deg'] });
   return <View style={BOX}><Animated.View style={{ opacity: o, transform:[{scale:s},{rotate:rot}] }}><Svg width={40} height={40} viewBox="0 0 40 40"><Path d="M20 4L23 15L34 15L25 21L28 32L20 26L12 32L15 21L6 15L17 15Z" stroke={G} strokeWidth={0.8} fill="none" strokeLinejoin="round"/></Svg></Animated.View></View>;
@@ -326,10 +326,10 @@ export default function FeatureSkyScreen({ kundliData, language = 'en', onBack, 
   const playReveal = () => {
     Animated.parallel([
       Animated.timing(nameOp, { toValue:1, duration:500, delay:200, useNativeDriver:true }),
-      Animated.timing(anchorOp, { toValue:1, duration:500, delay:100, easing:Easing.out(Easing.cubic), useNativeDriver:true }),
-      Animated.timing(lineOp, { toValue:1, duration:500, delay:400, easing:Easing.out(Easing.cubic), useNativeDriver:true }),
-      Animated.timing(holdOp, { toValue:1, duration:400, delay:650, easing:Easing.out(Easing.cubic), useNativeDriver:true }),
-      Animated.timing(guideOp, { toValue:1, duration:400, delay:850, easing:Easing.out(Easing.cubic), useNativeDriver:true }),
+      Animated.timing(anchorOp, { toValue:1, duration:500, delay:100, easing:Easing.bezier(0, 0, 0.2, 1), useNativeDriver:true }),
+      Animated.timing(lineOp, { toValue:1, duration:500, delay:400, easing:Easing.bezier(0, 0, 0.2, 1), useNativeDriver:true }),
+      Animated.timing(holdOp, { toValue:1, duration:400, delay:650, easing:Easing.bezier(0, 0, 0.2, 1), useNativeDriver:true }),
+      Animated.timing(guideOp, { toValue:1, duration:400, delay:850, easing:Easing.bezier(0, 0, 0.2, 1), useNativeDriver:true }),
     ]).start();
   };
 

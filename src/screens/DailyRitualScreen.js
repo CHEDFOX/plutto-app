@@ -135,18 +135,18 @@ export default function DailyRitualScreen({
     // Step 1: Show name (after 500ms)
     setTimeout(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Animated.timing(nameOpacity, { toValue: 1, duration: 800, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+      Animated.timing(nameOpacity, { toValue: 1, duration: 800, easing: Easing.bezier(0, 0, 0.58, 1), useNativeDriver: true }).start();
     }, 500);
 
     // Step 2: Show suggestion (after 1800ms)
     setTimeout(() => {
       setSuggestion(suggestionText);
-      Animated.timing(suggestionOpacity, { toValue: 1, duration: 600, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+      Animated.timing(suggestionOpacity, { toValue: 1, duration: 600, easing: Easing.bezier(0, 0, 0.58, 1), useNativeDriver: true }).start();
     }, 1800);
 
     // Step 3: Hold, then fade all and transition (after 4500ms)
     setTimeout(() => {
-      Animated.timing(allFade, { toValue: 0, duration: 500, easing: Easing.in(Easing.ease), useNativeDriver: true }).start(() => {
+      Animated.timing(allFade, { toValue: 0, duration: 500, easing: Easing.bezier(0.42, 0, 1, 1), useNativeDriver: true }).start(() => {
         if (onContinue) onContinue();
       });
     }, 4500);
@@ -155,12 +155,12 @@ export default function DailyRitualScreen({
   const startNewUserAnimation = () => {
     // Name fades in
     setTimeout(() => {
-      Animated.timing(nameOpacity, { toValue: 1, duration: 800, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+      Animated.timing(nameOpacity, { toValue: 1, duration: 800, easing: Easing.bezier(0, 0, 0.58, 1), useNativeDriver: true }).start();
     }, 500);
 
     // Hold, then transition
     setTimeout(() => {
-      Animated.timing(allFade, { toValue: 0, duration: 500, easing: Easing.in(Easing.ease), useNativeDriver: true }).start(() => {
+      Animated.timing(allFade, { toValue: 0, duration: 500, easing: Easing.bezier(0.42, 0, 1, 1), useNativeDriver: true }).start(() => {
         if (onContinue) onContinue();
       });
     }, 3000);

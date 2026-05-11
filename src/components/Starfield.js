@@ -15,13 +15,13 @@ const Star = React.memo(({ star, driftX, driftY }) => {
           toValue: Math.max(0.04, star.baseOpacity * 0.4),
           duration: star.twinkleSpeed,
           useNativeDriver: true,
-          easing: Easing.inOut(Easing.sin),
+          easing: Easing.bezier(0.37, 0, 0.63, 1),
         }),
         Animated.timing(opacity, {
           toValue: star.baseOpacity,
           duration: star.twinkleSpeed,
           useNativeDriver: true,
-          easing: Easing.inOut(Easing.sin),
+          easing: Easing.bezier(0.37, 0, 0.63, 1),
         }),
       ])
     );
@@ -65,14 +65,14 @@ export default function Starfield() {
   useEffect(() => {
     const loopX = Animated.loop(
       Animated.sequence([
-        Animated.timing(driftX, { toValue: 1, duration: 40000, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
-        Animated.timing(driftX, { toValue: -1, duration: 40000, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+        Animated.timing(driftX, { toValue: 1, duration: 40000, useNativeDriver: true, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        Animated.timing(driftX, { toValue: -1, duration: 40000, useNativeDriver: true, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
       ])
     );
     const loopY = Animated.loop(
       Animated.sequence([
-        Animated.timing(driftY, { toValue: 1, duration: 48000, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
-        Animated.timing(driftY, { toValue: -1, duration: 48000, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+        Animated.timing(driftY, { toValue: 1, duration: 48000, useNativeDriver: true, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        Animated.timing(driftY, { toValue: -1, duration: 48000, useNativeDriver: true, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
       ])
     );
     loopX.start();
