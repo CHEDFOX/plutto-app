@@ -1,0 +1,105 @@
+/**
+ * CORE CHART SECTION — Main scroll hook for unified wheel.
+ * Fetches from /core-chart, caches, shows hook. Opens CoreChartScreen.
+ */
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const W = a => `rgba(255,255,255,${a})`;
+const GOLD = '#D4AF37';
+const API = 'https://api.plutto.space/api/public';
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_AT = 6 * 24 * 60 * 60 * 1000;
+
+function CTA({ text, onPress }) {
+  const breathe = useRef(new Animated.Value(0.08)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(breathe, { toValue: 0.18, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      Animated.timing(breathe, { toValue: 0.08, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+    ])).start();
+  }, []);
+  return (
+    <TouchableOpacity activeOpacity={0.6} onPress={onPress}>
+      <Animated.View style={[s.ctaBox, { borderColor: breathe.interpolate({ inputRange: [0.08, 0.18], outputRange: [W(0.08), W(0.18)] }) }]}>
+        <Text style={s.ctaLabel}>{text}</Text>
+        <Text style={s.ctaArrow}>→</Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+export default function CoreChartSection({ kundliData, onOpenChart, onImpulse }) {
+  const [data, setData] = useState(null);
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const slideUp = useRef(new Animated.Value(20)).current;
+
+  const fetchChart = useCallback(async () => {
+    const res = await fetch(`${API}/core-chart`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kundli_data: kundliData }),
+    });
+    return await res.json();
+  }, [kundliData]);
+
+  useEffect(() => {
+    if (!kundliData) return;
+    const bd = kundliData?.raw?.birth_details || {};
+    const ck = `core_chart_${bd.year}_${bd.month}_${bd.day}`;
+
+    (async () => {
+      try {
+        const cached = await AsyncStorage.getItem(ck);
+        if (cached) {
+          const { data: cd, ts } = JSON.parse(cached);
+          const age = Date.now() - ts;
+          if (cd?.readings && age < CACHE_TTL) {
+            setData(cd);
+            if (age > REFRESH_AT) fetchChart().then(f => { if (f?.readings) { setData(f); AsyncStorage.setItem(ck, JSON.stringify({ data: f, ts: Date.now() })); } }).catch(() => {});
+            return;
+          }
+        }
+        const fresh = await fetchChart();
+        setData(fresh);
+        if (fresh?.readings) AsyncStorage.setItem(ck, JSON.stringify({ data: fresh, ts: Date.now() }));
+      } catch (e) {
+        try { const f = await fetchChart(); setData(f); } catch (_) {}
+      }
+    })();
+  }, [kundliData]);
+
+  useEffect(() => {
+    if (data) {
+      Animated.parallel([
+        Animated.timing(fadeIn, { toValue: 1, duration: 800, easing: Easing.bezier(0.25, 0.1, 0.25, 1), useNativeDriver: true }),
+        Animated.timing(slideUp, { toValue: 0, duration: 800, easing: Easing.bezier(0.25, 0.1, 0.25, 1), useNativeDriver: true }),
+      ]).start();
+    }
+  }, [data]);
+
+  if (!data) return null;
+
+  const readings = data?.readings || {};
+  const hookTitle = readings.hook_title || 'Five mirrors. One you.';
+  const hookBody = readings.hook_body || 'Your chart holds patterns that no single system can fully see. Together, they reveal what you already sense but haven\'t named.';
+  const ctaDive = readings.cta_dive || 'Open the wheel';
+
+  return (
+    <Animated.View style={[s.container, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+      <Text style={s.hookTitle}>{hookTitle}</Text>
+      <Text style={s.hookBody}>{hookBody}</Text>
+      <CTA text={ctaDive} onPress={() => { if (onImpulse) onImpulse(); if (onOpenChart) onOpenChart(data); }} />
+    </Animated.View>
+  );
+}
+
+const s = StyleSheet.create({
+  container: { paddingHorizontal: 28 },
+  hookTitle: { fontFamily: 'PlayfairDisplay', fontSize: 24, lineHeight: 34, color: W(0.9), marginBottom: 14 },
+  hookBody: { fontSize: 14, lineHeight: 24, color: W(0.5), fontWeight: '300', marginBottom: 4 },
+  ctaBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, paddingVertical: 18, paddingHorizontal: 22, marginVertical: 16 },
+  ctaLabel: { fontFamily: 'PlayfairDisplay', fontSize: 16, lineHeight: 22, color: W(0.88), fontStyle: 'italic', flex: 1, marginRight: 14 },
+  ctaArrow: { fontSize: 16, color: W(0.3), fontWeight: '200' },
+});

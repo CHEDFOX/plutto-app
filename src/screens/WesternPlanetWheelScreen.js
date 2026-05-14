@@ -1,18 +1,15 @@
 /**
- * WESTERN PLANET WHEEL
- *
- * 10 planets on a wheel. Select one → lines inside the circle
- * connect it to every other planet (colored by aspect type).
- * Reading: significance first, then aspect-by-aspect short notes.
- * Image spaces at random positions in readings.
+ * WESTERN PLANET WHEEL — Vedic-style rotation, image in selected circle, progressive disclosure.
  */
-
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Animated, Easing, Dimensions, ActivityIndicator, PanResponder,
+  Animated, Easing, Dimensions, ActivityIndicator, PanResponder, Image, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental)
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const GOLD = '#D4AF37';
@@ -20,420 +17,248 @@ const W = (a) => `rgba(255,255,255,${a})`;
 const API_BASE = 'https://api.plutto.space/api/public';
 
 const PLANETS = [
-  { id: 'Sun',     glyph: '☉', color: '#E8A317' },
-  { id: 'Moon',    glyph: '☽', color: '#C0C0C0' },
-  { id: 'Mercury', glyph: '☿', color: '#70A870' },
-  { id: 'Venus',   glyph: '♀', color: '#D0A0C0' },
-  { id: 'Mars',    glyph: '♂', color: '#CC5544' },
-  { id: 'Jupiter', glyph: '♃', color: '#CCAA33' },
-  { id: 'Saturn',  glyph: '♄', color: '#5577AA' },
-  { id: 'Uranus',  glyph: '⛢', color: '#40B0B0' },
-  { id: 'Neptune', glyph: '♆', color: '#7080CC' },
-  { id: 'Pluto',   glyph: '♇', color: '#886666' },
+  {id:'Sun',glyph:'☉',color:'#E8A317'},{id:'Moon',glyph:'☽',color:'#C0C0C0'},
+  {id:'Mercury',glyph:'☿',color:'#70A870'},{id:'Venus',glyph:'♀',color:'#D0A0C0'},
+  {id:'Mars',glyph:'♂',color:'#CC5544'},{id:'Jupiter',glyph:'♃',color:'#CCAA33'},
+  {id:'Saturn',glyph:'♄',color:'#5577AA'},{id:'Uranus',glyph:'⛢',color:'#40B0B0'},
+  {id:'Neptune',glyph:'♆',color:'#7080CC'},{id:'Pluto',glyph:'♇',color:'#886666'},
 ];
 
 const COUNT = PLANETS.length;
 const ANGLE_STEP = (2 * Math.PI) / COUNT;
-const BOTTOM_ANGLE = Math.PI / 2;
-
+const BOTTOM = Math.PI / 2;
 const WHEEL_SIZE = Math.min(SW * 0.85, 350);
 const WHEEL_R = WHEEL_SIZE / 2;
 const ORBIT_R = WHEEL_R - 30;
-const NODE_SIZE = 40;
+const NS = 40;
+const NS_SEL = 58;
 
-const ASPECT_COLORS = {
-  conjunction: '#FFFFFF',
-  opposition:  '#CC4444',
-  trine:       '#44AA44',
-  square:      '#CC4444',
-  sextile:     '#4488CC',
-  quincunx:    '#AA8844',
-};
+const ASPECT_COLORS = { conjunction:'#FFFFFF', opposition:'#CC4444', trine:'#44AA44', square:'#CC4444', sextile:'#4488CC', quincunx:'#AA8844' };
 
-const IMG_SPOTS = [
-  { align: 'flex-end', mt: 8 }, { align: 'flex-start', mt: 16 },
-  { align: 'flex-end', mt: 12 }, { align: 'flex-start', mt: 6 },
-  { align: 'center', mt: 14 }, { align: 'flex-end', mt: 10 },
-  { align: 'flex-start', mt: 18 }, { align: 'center', mt: 8 },
-  { align: 'flex-end', mt: 20 }, { align: 'flex-start', mt: 12 },
-];
-
-
-// ─── Aspect Lines inside wheel ───
-function AspectLines({ aspects, selectedIdx, rotation }) {
-  if (!aspects || aspects.length === 0 || selectedIdx === null) return null;
-
-  return aspects.map((a, i) => {
-    const otherIdx = PLANETS.findIndex(p => p.id === a.other_planet);
-    if (otherIdx < 0) return null;
-
-    const angle1 = BOTTOM_ANGLE + selectedIdx * ANGLE_STEP + rotation;
-    const angle2 = BOTTOM_ANGLE + otherIdx * ANGLE_STEP + rotation;
-
-    const x1 = WHEEL_R + (ORBIT_R - 8) * Math.cos(angle1);
-    const y1 = WHEEL_R + (ORBIT_R - 8) * Math.sin(angle1);
-    const x2 = WHEEL_R + (ORBIT_R - 8) * Math.cos(angle2);
-    const y2 = WHEEL_R + (ORBIT_R - 8) * Math.sin(angle2);
-
-    const color = ASPECT_COLORS[a.aspect] || W(0.15);
-    const opacity = a.tight ? 0.4 : 0.15;
-    const width = a.tight ? 1.2 : 0.6;
-
-    return (
-      <Line
-        key={`asp-${i}`}
-        x1={x1} y1={y1} x2={x2} y2={y2}
-        stroke={color} strokeWidth={width} opacity={opacity}
-      />
-    );
-  });
-}
-
-
-// ─── Planet Node ───
-function PlanetNode({ planet, angle, isSelected, onPress }) {
-  const x = WHEEL_R + ORBIT_R * Math.cos(angle) - NODE_SIZE / 2;
-  const y = WHEEL_R + ORBIT_R * Math.sin(angle) - NODE_SIZE / 2;
-
-  const distFromBottom = Math.abs(angle - BOTTOM_ANGLE);
-  const normDist = Math.min(distFromBottom, 2 * Math.PI - distFromBottom);
-  const scale = isSelected ? 1.25 : 0.65 + 0.3 * (1 - normDist / Math.PI);
-  const opacity = isSelected ? 1 : 0.25 + 0.45 * (1 - normDist / Math.PI);
-
+function RevealCTA({ text, onPress }) {
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={onPress}
-      style={[ws.node, {
-        left: x, top: y, width: NODE_SIZE, height: NODE_SIZE, borderRadius: NODE_SIZE / 2,
-        transform: [{ scale }], opacity,
-        borderColor: isSelected ? planet.color : W(0.06),
-        borderWidth: isSelected ? 1.5 : 0.5,
-        backgroundColor: isSelected ? `${planet.color}12` : 'transparent',
-      }]}
-    >
-      <Text style={[ws.glyph, { color: isSelected ? planet.color : W(0.4), fontSize: isSelected ? 20 : 16 }]}>{planet.glyph}</Text>
-      <Text style={[ws.label, { color: isSelected ? W(0.7) : W(0.15) }]} numberOfLines={1}>{planet.id}</Text>
+    <TouchableOpacity activeOpacity={0.6} onPress={onPress} style={cs.ctaTouch}>
+      <View style={cs.ctaBox}><Text style={cs.ctaText}>{text}</Text><Text style={cs.ctaArrow}>→</Text></View>
     </TouchableOpacity>
   );
 }
 
-
-// ─── Animated Wheel ───
-function AnimatedWheel({ rotationAngle, selectedIdx, hasSpun, onPress, aspects }) {
-  const [rotation, setRotation] = useState(0);
-  const [positions, setPositions] = useState(() => PLANETS.map((_, i) => BOTTOM_ANGLE + i * ANGLE_STEP));
-
-  useEffect(() => {
-    const id = rotationAngle.addListener(({ value }) => {
-      setRotation(value);
-      setPositions(PLANETS.map((_, i) => BOTTOM_ANGLE + i * ANGLE_STEP + value));
-    });
-    return () => rotationAngle.removeListener(id);
-  }, []);
-
-  return (
-    <>
-      {/* Aspect lines SVG */}
-      <Svg width={WHEEL_SIZE} height={WHEEL_SIZE} style={StyleSheet.absoluteFill}>
-        <Circle cx={WHEEL_R} cy={WHEEL_R} r={ORBIT_R + NODE_SIZE / 2} stroke={W(0.04)} strokeWidth={0.5} fill="none" />
-        <Circle cx={WHEEL_R} cy={WHEEL_R} r={ORBIT_R * 0.4} stroke={W(0.02)} strokeWidth={0.3} fill="none" strokeDasharray="2,6" />
-        <Circle cx={WHEEL_R} cy={WHEEL_R} r={3} fill={W(0.06)} />
-        {hasSpun && selectedIdx !== null && (
-          <AspectLines aspects={aspects} selectedIdx={selectedIdx} rotation={rotation} />
-        )}
-      </Svg>
-
-      {/* Planet nodes */}
-      {PLANETS.map((p, i) => (
-        <PlanetNode
-          key={p.id}
-          planet={p}
-          angle={positions[i]}
-          isSelected={i === selectedIdx && hasSpun}
-          onPress={() => onPress(i)}
-        />
-      ))}
-    </>
-  );
-}
-
-
-// ─── Main Component ───
 export default function WesternPlanetWheelScreen({ visible, onClose, kundliData }) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [reading, setReading] = useState(null);
   const [loading, setLoading] = useState(false);
   const [hasSpun, setHasSpun] = useState(false);
+  const [revealLevel, setRevealLevel] = useState(0);
 
-  const rotationAngle = useRef(new Animated.Value(0)).current;
-  const currentRotation = useRef(0);
-  const lastGestureAngle = useRef(0);
-  const velocity = useRef(0);
-  const decayAnim = useRef(null);
+  const rot = useRef(0);
+  const [rotVal, setRotVal] = useState(0);
+  const lastAng = useRef(0);
+  const vel = useRef(0);
 
   const slideAnim = useRef(new Animated.Value(SH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const imgOpacity = useRef(new Animated.Value(0)).current;
+  const glyphOpacity = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    const id = rotationAngle.addListener(({ value }) => { currentRotation.current = value; });
-    return () => rotationAngle.removeListener(id);
-  }, []);
+  useEffect(()=>{if(visible){setReading(null);setHasSpun(false);setSelectedIdx(0);setRevealLevel(0);
+    rot.current=0;setRotVal(0);imgOpacity.setValue(0);glyphOpacity.setValue(1);
+    Animated.parallel([Animated.spring(slideAnim,{toValue:0,tension:65,friction:11,useNativeDriver:true}),Animated.timing(fadeAnim,{toValue:1,duration:300,useNativeDriver:true})]).start();
+  }else{Animated.parallel([Animated.timing(slideAnim,{toValue:SH,duration:250,easing:Easing.bezier(0.4,0,1,1),useNativeDriver:true}),Animated.timing(fadeAnim,{toValue:0,duration:200,useNativeDriver:true})]).start();}
+  },[visible]);
 
-  useEffect(() => {
-    if (visible) {
-      setReading(null); setHasSpun(false); setSelectedIdx(0);
-      currentRotation.current = 0; rotationAngle.setValue(0);
-      Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: SH, duration: 250, easing: Easing.bezier(0.4, 0, 1, 1), useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [visible]);
-
-  const fetchReading = useCallback(async (planetName) => {
-    setLoading(true); setReading(null);
-    try {
-      const r = await fetch(`${API_BASE}/western-planet`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planet: planetName,
-          kundli_data: kundliData || { raw: { birth_details: { year: 1976, month: 7, day: 28, hour: 9, minute: 30, latitude: 25.35, longitude: 74.64 } } },
-        }),
-      });
+  const fetchReading = useCallback(async(name)=>{
+    setLoading(true);setReading(null);setRevealLevel(0);
+    try{const r=await fetch(`${API_BASE}/western-planet`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({planet:name,kundli_data:kundliData||{raw:{birth_details:{year:1976,month:7,day:28,hour:9,minute:30,latitude:25.35,longitude:74.64}}}})});
       setReading(await r.json());
-    } catch (e) { console.log('Western planet error:', e); }
-    setLoading(false);
-  }, [kundliData]);
+    }catch(e){console.log('W planet err:',e);}setLoading(false);
+  },[kundliData]);
 
-  const snapToNearest = useCallback((rot) => {
-    const norm = ((rot % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-    let closest = 0, closestDist = Infinity;
-    for (let i = 0; i < COUNT; i++) {
-      const pa = ((BOTTOM_ANGLE + i * ANGLE_STEP + norm) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
-      const d = Math.min(Math.abs(pa - BOTTOM_ANGLE), 2 * Math.PI - Math.abs(pa - BOTTOM_ANGLE));
-      if (d < closestDist) { closestDist = d; closest = i; }
-    }
-    const target = -closest * ANGLE_STEP;
-    const diff = target - rot;
-    const snap = rot + diff - Math.round(diff / (2 * Math.PI)) * 2 * Math.PI;
-    Animated.spring(rotationAngle, { toValue: snap, tension: 80, friction: 12, useNativeDriver: false }).start(() => {
-      currentRotation.current = snap; setSelectedIdx(closest); setHasSpun(true);
-      fetchReading(PLANETS[closest].id);
-    });
-  }, [fetchReading]);
+  const animateTo = useCallback((idx)=>{
+    const target=-idx*ANGLE_STEP, diff=target-rot.current;
+    const snap=rot.current+diff-Math.round(diff/(2*Math.PI))*2*Math.PI;
+    const start=rot.current, delta=snap-start;
+    glyphOpacity.setValue(1);imgOpacity.setValue(0);
+    let step=0;
+    const anim=()=>{step++;const t=Math.min(step/18,1);rot.current=start+delta*(1-Math.pow(1-t,3));setRotVal(rot.current);
+      if(t<1)requestAnimationFrame(anim);
+      else{rot.current=snap;setRotVal(snap);setSelectedIdx(idx);setHasSpun(true);fetchReading(PLANETS[idx].id);
+        Animated.parallel([
+          Animated.timing(glyphOpacity,{toValue:0,duration:500,useNativeDriver:true}),
+          Animated.timing(imgOpacity,{toValue:1,duration:600,delay:200,useNativeDriver:true}),
+        ]).start();}};
+    requestAnimationFrame(anim);
+  },[fetchReading]);
 
-  const handlePlanetPress = useCallback((idx) => {
-    if (decayAnim.current) { decayAnim.current.stop(); decayAnim.current = null; }
-    rotationAngle.stopAnimation();
-    const target = -idx * ANGLE_STEP;
-    const diff = target - currentRotation.current;
-    const snap = currentRotation.current + diff - Math.round(diff / (2 * Math.PI)) * 2 * Math.PI;
-    Animated.spring(rotationAngle, { toValue: snap, tension: 60, friction: 10, useNativeDriver: false }).start(() => {
-      currentRotation.current = snap; setSelectedIdx(idx); setHasSpun(true);
-      fetchReading(PLANETS[idx].id);
-    });
-  }, [fetchReading]);
+  const snapToNearest = useCallback((r)=>{
+    const norm=((r%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+    let ci=0,cd=Infinity;
+    for(let i=0;i<COUNT;i++){const pa=((BOTTOM+i*ANGLE_STEP+norm)%(2*Math.PI)+2*Math.PI)%(2*Math.PI);const d=Math.min(Math.abs(pa-BOTTOM),2*Math.PI-Math.abs(pa-BOTTOM));if(d<cd){cd=d;ci=i;}}
+    animateTo(ci);
+  },[animateTo]);
 
-  const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
-    onPanResponderGrant: (evt) => {
-      if (decayAnim.current) { decayAnim.current.stop(); decayAnim.current = null; }
-      rotationAngle.stopAnimation();
-      const t = evt.nativeEvent;
-      lastGestureAngle.current = Math.atan2(t.locationY - WHEEL_R, t.locationX - WHEEL_R);
-      velocity.current = 0;
-    },
-    onPanResponderMove: (evt) => {
-      const t = evt.nativeEvent;
-      const curr = Math.atan2(t.locationY - WHEEL_R, t.locationX - WHEEL_R);
-      let delta = curr - lastGestureAngle.current;
-      if (delta > Math.PI) delta -= 2 * Math.PI;
-      if (delta < -Math.PI) delta += 2 * Math.PI;
-      velocity.current = delta;
-      currentRotation.current += delta;
-      rotationAngle.setValue(currentRotation.current);
-      lastGestureAngle.current = curr;
-    },
-    onPanResponderRelease: () => {
-      const v = velocity.current;
-      if (Math.abs(v) > 0.02) {
-        const target = currentRotation.current + v * 12;
-        decayAnim.current = Animated.timing(rotationAngle, { toValue: target, duration: 700, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: false });
-        decayAnim.current.start(({ finished }) => { if (finished) snapToNearest(target); });
-      } else { snapToNearest(currentRotation.current); }
-    },
+  const wasDrag=useRef(false);
+  const pan=useRef(PanResponder.create({
+    onStartShouldSetPanResponder:()=>true,onMoveShouldSetPanResponder:()=>true,
+    onPanResponderGrant:(e)=>{lastAng.current=Math.atan2(e.nativeEvent.locationY-WHEEL_R,e.nativeEvent.locationX-WHEEL_R);vel.current=0;wasDrag.current=false;},
+    onPanResponderMove:(e)=>{wasDrag.current=true;const a=Math.atan2(e.nativeEvent.locationY-WHEEL_R,e.nativeEvent.locationX-WHEEL_R);
+      let d=a-lastAng.current;if(d>Math.PI)d-=Math.PI*2;if(d<-Math.PI)d+=Math.PI*2;vel.current=d;rot.current+=d;setRotVal(rot.current);lastAng.current=a;},
+    onPanResponderRelease:(e)=>{if(!wasDrag.current){
+      let best=-1,bd=Infinity;for(let i=0;i<COUNT;i++){const a=BOTTOM+i*ANGLE_STEP+rot.current;const px=WHEEL_R+ORBIT_R*Math.cos(a);const py=WHEEL_R+ORBIT_R*Math.sin(a);
+        const d=Math.sqrt((e.nativeEvent.locationX-px)**2+(e.nativeEvent.locationY-py)**2);if(d<bd){bd=d;best=i;}}
+      if(bd<NS*1.2&&best>=0)animateTo(best);return;}
+      const v=vel.current;if(Math.abs(v)>0.02){const target=rot.current+v*12,start=rot.current,delta=target-start;let step=0;
+        const decay=()=>{step++;const t=Math.min(step/20,1);rot.current=start+delta*(1-Math.pow(1-t,2));setRotVal(rot.current);if(t<1)requestAnimationFrame(decay);else snapToNearest(rot.current);};
+        requestAnimationFrame(decay);}else snapToNearest(rot.current);},
   })).current;
 
-  if (!visible) return null;
-  const selected = PLANETS[selectedIdx];
-  const aspects = reading?.planet_data?.aspects || [];
+  const reveal = useCallback(() => {
+    LayoutAnimation.configureNext({duration:400,create:{type:LayoutAnimation.Types.easeInEaseOut,property:LayoutAnimation.Properties.opacity},update:{type:LayoutAnimation.Types.easeInEaseOut}});
+    setRevealLevel(prev=>prev+1);
+  }, []);
 
-  return (
+  if(!visible)return null;
+  const selected=PLANETS[selectedIdx];
+  const aspects=reading?.planet_data?.aspects||[];
+
+  return(
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <Animated.View style={[s.backdrop, { opacity: fadeAnim }]}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-      </Animated.View>
-
-      <Animated.View style={[s.sheet, { transform: [{ translateY: slideAnim }] }]}>
-        <View style={s.handleWrap}><View style={s.handle} /></View>
-        <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={s.closeText}>✕</Text>
-        </TouchableOpacity>
+      <Animated.View style={[s.backdrop,{opacity:fadeAnim}]}><TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1}/></Animated.View>
+      <Animated.View style={[s.sheet,{transform:[{translateY:slideAnim}]}]}>
+        <View style={s.handleWrap}><View style={s.handle}/></View>
+        <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={{top:12,bottom:12,left:12,right:12}}><Text style={s.closeText}>✕</Text></TouchableOpacity>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent} bounces={false}>
-          <Text style={s.title}>Your Planets</Text>
-          <Text style={s.subtitle}>Spin or tap to explore</Text>
-
           {/* Wheel */}
-          <View style={[ws.wheelWrap, { width: WHEEL_SIZE, height: WHEEL_SIZE }]}>
-            {/* Indicator */}
-            <View style={ws.indicator}><View style={ws.indicatorTriangle} /></View>
-            <View {...panResponder.panHandlers} style={[ws.touchZone, { width: WHEEL_SIZE, height: WHEEL_SIZE }]}>
-              <AnimatedWheel
-                rotationAngle={rotationAngle}
-                selectedIdx={selectedIdx}
-                hasSpun={hasSpun}
-                onPress={handlePlanetPress}
-                aspects={aspects}
-              />
-            </View>
+          <View style={[ws.wrap,{width:WHEEL_SIZE,height:WHEEL_SIZE}]}>
+            <Svg width={WHEEL_SIZE} height={WHEEL_SIZE} style={StyleSheet.absoluteFill}>
+              <Circle cx={WHEEL_R} cy={WHEEL_R} r={ORBIT_R+NS/2} stroke={W(0.04)} strokeWidth={0.5} fill="none"/>
+              <Circle cx={WHEEL_R} cy={WHEEL_R} r={ORBIT_R*0.4} stroke={W(0.02)} strokeWidth={0.3} fill="none" strokeDasharray="2,6"/>
+              <Circle cx={WHEEL_R} cy={WHEEL_R} r={3} fill={W(0.06)}/>
+              {/* Aspect lines */}
+              {hasSpun&&aspects.map((a,i)=>{
+                const oi=PLANETS.findIndex(p=>p.id===a.other_planet);if(oi<0)return null;
+                const a1=BOTTOM+selectedIdx*ANGLE_STEP+rotVal,a2=BOTTOM+oi*ANGLE_STEP+rotVal;
+                return <Line key={i} x1={WHEEL_R+(ORBIT_R-8)*Math.cos(a1)} y1={WHEEL_R+(ORBIT_R-8)*Math.sin(a1)} x2={WHEEL_R+(ORBIT_R-8)*Math.cos(a2)} y2={WHEEL_R+(ORBIT_R-8)*Math.sin(a2)} stroke={ASPECT_COLORS[a.aspect]||W(0.15)} strokeWidth={a.tight?1.2:0.6} opacity={a.tight?0.4:0.15}/>;
+              })}
+            </Svg>
+            <View style={ws.indicator}><View style={ws.triUp}/></View>
+
+            {PLANETS.map((p,i)=>{
+              const a=BOTTOM+i*ANGLE_STEP+rotVal;
+              const isSel=i===selectedIdx&&hasSpun;
+              const size=isSel?NS_SEL:NS;
+              const x=WHEEL_R+ORBIT_R*Math.cos(a)-size/2,y=WHEEL_R+ORBIT_R*Math.sin(a)-size/2;
+              const dist=Math.abs(a-BOTTOM),nd=Math.min(dist,2*Math.PI-dist);
+              const op=isSel?1:0.25+0.45*(1-nd/Math.PI);
+              return(<View key={p.id} style={[ws.node,{left:x,top:y,width:size,height:size,borderRadius:size/2,opacity:op,
+                borderColor:isSel?p.color:W(0.06),borderWidth:isSel?1.5:0.5,backgroundColor:isSel?`${p.color}12`:'transparent'}]}>
+                {isSel?(
+                  <>
+                    <Animated.Text style={[ws.glyphText,{color:p.color,fontSize:20,opacity:glyphOpacity}]}>{p.glyph}</Animated.Text>
+                    <Animated.View style={[ws.imgInCircle,{opacity:imgOpacity}]}>
+                      <Image source={{uri:`https://api.plutto.space/static/planets/${p.id}.png`}} style={ws.imgCircleImg} resizeMode="contain"/>
+                    </Animated.View>
+                  </>
+                ):(
+                  <Text style={[ws.glyphText,{color:W(0.4),fontSize:16}]}>{p.glyph}</Text>
+                )}
+                {!isSel&&<Text style={[ws.labelText,{color:W(0.15)}]} numberOfLines={1}>{p.id}</Text>}
+              </View>);
+            })}
+            <View {...pan.panHandlers} style={[ws.touchZone,{width:WHEEL_SIZE,height:WHEEL_SIZE}]}/>
           </View>
 
-          {/* Reading */}
+          {/* Reading — Progressive */}
           <View style={rs.container}>
-            {!hasSpun ? (
-              <View style={rs.empty}><Text style={rs.emptyText}>Spin the wheel to select a planet</Text></View>
-            ) : loading ? (
-              <View style={rs.loadWrap}><ActivityIndicator color={GOLD} size="small" /><Text style={rs.loadText}>Reading {selected.id}...</Text></View>
-            ) : reading ? (
+            {!hasSpun?(
+              <Text style={rs.emptyText}>Spin the wheel to select a planet</Text>
+            ):loading?(
+              <View style={rs.loadWrap}><ActivityIndicator color={GOLD} size="small"/><Text style={rs.loadText}>Reading {selected.id}...</Text></View>
+            ):reading?(
               <>
-                {/* Header */}
                 <View style={rs.header}>
-                  <Text style={[rs.planetGlyph, { color: selected.color }]}>{selected.glyph}</Text>
+                  <Text style={[rs.planetGlyph,{color:selected.color}]}>{selected.glyph}</Text>
                   <View style={rs.headerInfo}>
                     <Text style={rs.planetName}>{selected.id}</Text>
-                    <Text style={rs.planetMeta}>
-                      {reading.planet_data?.sign} · House {reading.planet_data?.house} · {reading.planet_data?.degree}°
-                      {reading.planet_data?.is_retrograde ? ' · Retrograde' : ''}
-                    </Text>
-                    <Text style={rs.archetype}>{reading.planet_data?.archetype}</Text>
+                    <Text style={rs.planetMeta}>{reading.planet_data?.sign} · House {reading.planet_data?.house} · {reading.planet_data?.degree}°{reading.planet_data?.is_retrograde?' · Retrograde':''}</Text>
+                    {reading.planet_data?.archetype&&<Text style={rs.archetype}>{reading.planet_data.archetype}</Text>}
                   </View>
                 </View>
 
-                {/* Significance */}
-                {reading.significance && (
-                  <Text style={rs.sigText}>{reading.significance}</Text>
-                )}
+                {/* STAGE 1: Significance */}
+                {reading.significance&&<Text style={rs.sigText}>{reading.significance}</Text>}
 
-                {/* Aspect legend */}
-                {aspects.length > 0 && (
-                  <View style={rs.legendRow}>
-                    {[['△ trine', '#44AA44'], ['□ square', '#CC4444'], ['☌ conj', '#FFFFFF'], ['⚹ sextile', '#4488CC']].map(([label, c]) => (
-                      <Text key={label} style={[rs.legendItem, { color: c }]}>{label}</Text>
-                    ))}
-                  </View>
-                )}
+                {revealLevel===0&&aspects.length>0&&<RevealCTA text="See every aspect connection" onPress={reveal}/>}
 
-                {/* Aspect readings */}
-                {reading.aspects_reading ? (
-                  <View style={rs.aspectsSection}>
-                    {reading.aspects_reading.split('\n').filter(l => l.trim()).map((line, i) => {
-                      const asp = aspects[i];
-                      const imgSpot = IMG_SPOTS[i % IMG_SPOTS.length];
-                      return (
-                        <View key={i} style={rs.aspectRow}>
-                          {/* Aspect dot */}
-                          <View style={[rs.aspectDot, { backgroundColor: asp ? ASPECT_COLORS[asp.aspect] || W(0.15) : W(0.1) }]} />
-                          <View style={rs.aspectContent}>
-                            <Text style={rs.aspectLine}>{line}</Text>
-                            {/* Image zone at random spots — show every 3rd */}
-                            {i % 3 === 1 && (
-                              <View style={[rs.imgZone, { alignSelf: imgSpot.align, marginTop: imgSpot.mt }]}>
-                                <View style={rs.imgPlaceholder} />
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      );
+                {/* STAGE 2: Aspect legend + readings */}
+                {revealLevel>=1&&aspects.length>0&&(
+                  <>
+                    <View style={rs.legendRow}>
+                      {[['△ trine','#44AA44'],['□ square','#CC4444'],['☌ conj','#FFFFFF'],['⚹ sextile','#4488CC']].map(([l,c])=>(
+                        <Text key={l} style={[rs.legendItem,{color:c}]}>{l}</Text>
+                      ))}
+                    </View>
+                    {reading.aspects_reading&&reading.aspects_reading.split('\n').filter(l=>l.trim()).map((line,i)=>{
+                      const asp=aspects[i];
+                      return(<View key={i} style={rs.aspectRow}>
+                        <View style={[rs.aspectDot,{backgroundColor:asp?ASPECT_COLORS[asp.aspect]||W(0.15):W(0.1)}]}/>
+                        <Text style={rs.aspectLine}>{line}</Text>
+                      </View>);
                     })}
-                  </View>
-                ) : null}
+                  </>
+                )}
               </>
-            ) : null}
+            ):null}
           </View>
-
-          <View style={{ height: 60 }} />
+          <View style={{height:60}}/>
         </ScrollView>
       </Animated.View>
     </View>
   );
 }
 
-
-const ws = StyleSheet.create({
-  wheelWrap: { alignSelf: 'center', marginTop: 16, marginBottom: 8 },
-  touchZone: { position: 'absolute', top: 0, left: 0 },
-  node: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  glyph: { fontWeight: '300' },
-  label: { fontSize: 7, marginTop: 1, letterSpacing: 0.3 },
-  indicator: { position: 'absolute', bottom: -16, left: WHEEL_R - 7, alignItems: 'center', zIndex: 10 },
-  indicatorTriangle: {
-    width: 0, height: 0,
-    borderLeftWidth: 6, borderRightWidth: 6, borderBottomWidth: 9,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: GOLD,
-    opacity: 0.5, transform: [{ rotate: '180deg' }],
-  },
+const cs=StyleSheet.create({
+  ctaTouch:{marginVertical:20},
+  ctaBox:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderWidth:1,borderColor:W(0.10),paddingVertical:18,paddingHorizontal:22},
+  ctaText:{fontFamily:'PlayfairDisplay',fontSize:16,lineHeight:22,color:W(0.85),fontStyle:'italic',flex:1,marginRight:14},
+  ctaArrow:{fontSize:16,color:W(0.3),fontWeight:'200'},
 });
-
-const rs = StyleSheet.create({
-  container: { paddingHorizontal: 24, paddingTop: 24, minHeight: 200 },
-  empty: { alignItems: 'center', paddingTop: 30 },
-  emptyText: { fontSize: 13, color: W(0.12), letterSpacing: 1.5, fontWeight: '300' },
-  loadWrap: { alignItems: 'center', paddingTop: 30, gap: 14 },
-  loadText: { fontSize: 11, color: W(0.18), letterSpacing: 1.5, fontWeight: '300' },
-
-  header: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18 },
-  planetGlyph: { fontSize: 38, fontWeight: '200' },
-  headerInfo: { flex: 1 },
-  planetName: { fontFamily: 'PlayfairDisplay', fontSize: 24, color: W(0.85), letterSpacing: 0.5 },
-  planetMeta: { fontSize: 12, color: W(0.25), marginTop: 4, fontWeight: '300' },
-  archetype: { fontSize: 11, color: GOLD, opacity: 0.4, marginTop: 3, letterSpacing: 1.5, fontWeight: '400' },
-
-  sigText: { fontSize: 15, color: W(0.7), lineHeight: 25, fontWeight: '300', marginBottom: 22 },
-
-  legendRow: { flexDirection: 'row', gap: 14, marginBottom: 18, flexWrap: 'wrap' },
-  legendItem: { fontSize: 10, fontWeight: '400', letterSpacing: 0.5, opacity: 0.5 },
-
-  aspectsSection: { gap: 14 },
-  aspectRow: { flexDirection: 'row', gap: 10 },
-  aspectDot: { width: 6, height: 6, borderRadius: 3, marginTop: 7, opacity: 0.6 },
-  aspectContent: { flex: 1 },
-  aspectLine: { fontSize: 13, color: W(0.55), lineHeight: 21, fontWeight: '300' },
-
-  imgZone: { marginTop: 6, marginBottom: 4 },
-  imgPlaceholder: { width: 60, height: 60, borderRadius: 10, borderWidth: 0.5, borderColor: W(0.02), backgroundColor: W(0.005) },
+const ws=StyleSheet.create({
+  wrap:{alignSelf:'center',marginTop:16,marginBottom:8},
+  touchZone:{position:'absolute',top:0,left:0,zIndex:5},
+  node:{position:'absolute',alignItems:'center',justifyContent:'center',overflow:'hidden'},
+  glyphText:{fontWeight:'300'},
+  labelText:{fontSize:7,marginTop:1,letterSpacing:0.3},
+  indicator:{position:'absolute',bottom:-16,left:WHEEL_R-7,alignItems:'center',zIndex:10},
+  triUp:{width:0,height:0,borderLeftWidth:6,borderRightWidth:6,borderBottomWidth:9,borderLeftColor:'transparent',borderRightColor:'transparent',borderBottomColor:GOLD,opacity:0.5,transform:[{rotate:'180deg'}]},
+  imgInCircle:{position:'absolute',width:'100%',height:'100%',alignItems:'center',justifyContent:'center'},
+  imgCircleImg:{width:'75%',height:'75%',borderRadius:100},
 });
-
-const s = StyleSheet.create({
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.8)' },
-  sheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: SH * 0.92,
-    backgroundColor: '#060606', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    borderTopWidth: 0.5, borderColor: W(0.06),
-  },
-  handleWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
-  handle: { width: 36, height: 3.5, borderRadius: 2, backgroundColor: W(0.1) },
-  closeBtn: { position: 'absolute', top: 14, right: 20, zIndex: 10 },
-  closeText: { fontSize: 18, color: W(0.25), fontWeight: '300' },
-  scrollContent: { paddingTop: 12, paddingBottom: 40 },
-  title: { fontFamily: 'PlayfairDisplay', fontSize: 22, color: W(0.8), textAlign: 'center' },
-  subtitle: { fontSize: 11, color: W(0.15), textAlign: 'center', marginTop: 6, letterSpacing: 1.5, fontWeight: '300' },
+const rs=StyleSheet.create({
+  container:{paddingHorizontal:24,paddingTop:24,minHeight:200},
+  emptyText:{fontSize:13,color:W(0.12),letterSpacing:1.5,fontWeight:'300',textAlign:'center',marginTop:30},
+  loadWrap:{alignItems:'center',paddingTop:30,gap:14},
+  loadText:{fontSize:11,color:W(0.18),letterSpacing:1.5,fontWeight:'300'},
+  header:{flexDirection:'row',alignItems:'center',gap:14,marginBottom:18},
+  planetGlyph:{fontSize:38,fontWeight:'200'},
+  headerInfo:{flex:1},
+  planetName:{fontFamily:'PlayfairDisplay',fontSize:24,color:W(0.85),letterSpacing:0.5},
+  planetMeta:{fontSize:12,color:W(0.25),marginTop:4,fontWeight:'300'},
+  archetype:{fontSize:11,color:GOLD,opacity:0.4,marginTop:3,letterSpacing:1.5,fontWeight:'400'},
+  sigText:{fontSize:15,color:W(0.7),lineHeight:25,fontWeight:'300',marginBottom:22},
+  legendRow:{flexDirection:'row',gap:14,marginBottom:18,flexWrap:'wrap'},
+  legendItem:{fontSize:10,fontWeight:'400',letterSpacing:0.5,opacity:0.5},
+  aspectRow:{flexDirection:'row',gap:10,marginBottom:14},
+  aspectDot:{width:6,height:6,borderRadius:3,marginTop:7,opacity:0.6},
+  aspectLine:{fontSize:13,color:W(0.55),lineHeight:21,fontWeight:'300',flex:1},
+});
+const s=StyleSheet.create({
+  backdrop:{...StyleSheet.absoluteFillObject,backgroundColor:'rgba(0,0,0,0.8)'},
+  sheet:{position:'absolute',bottom:0,left:0,right:0,height:SH*0.92,backgroundColor:'#060606',borderTopLeftRadius:24,borderTopRightRadius:24,borderTopWidth:0.5,borderColor:W(0.06)},
+  handleWrap:{alignItems:'center',paddingTop:10,paddingBottom:4},
+  handle:{width:36,height:3.5,borderRadius:2,backgroundColor:W(0.1)},
+  closeBtn:{position:'absolute',top:14,right:20,zIndex:10},
+  closeText:{fontSize:18,color:W(0.25),fontWeight:'300'},
+  scrollContent:{paddingTop:12,paddingBottom:40},
 });

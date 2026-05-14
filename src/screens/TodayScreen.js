@@ -1,142 +1,270 @@
 /**
- * TODAY SCREEN
- * 
- * Simple, clean. No headings inside.
- * Just the reading text + subtle day data + image space at bottom.
- * Gold used only for truly important highlights.
+ * TODAY CARD — The layered card.
+ *
+ * Surface:  1-2 line insight + muted attribution. Nothing else.
+ * Pull:     Tap or scroll → card breathes open. Explanation + strips.
+ * Strips:   Contextual questions, stagger in. Tap → route to feature.
+ * Cross:    "What is another tradition saying?" → secondary system.
+ * Return:   Scroll up or tap surface → collapse to calm.
+ *
+ * All text comes from the backend. Frontend renders blindly.
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Animated, Easing, Dimensions, ActivityIndicator,
 } from 'react-native';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const GOLD = '#D4AF37';
 const W = (a) => `rgba(255,255,255,${a})`;
-const API_BASE = 'https://api.plutto.space/api/public';
+const API = 'https://api.plutto.space/api/public';
 
 
-export default function TodayScreen({ visible, onClose, kundliData }) {
-  const [today, setToday] = useState(null);
-  const [reading, setReading] = useState('');
+export default function TodayScreen({ visible, onClose, kundliData, onNavigate }) {
+  // ── Data ──
+  const [card, setCard] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  const slideAnim = useRef(new Animated.Value(SH)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
+  // ── Animations ──
+  const slideAnim   = useRef(new Animated.Value(SH)).current;
+  const fadeAnim    = useRef(new Animated.Value(0)).current;
+  const surfaceOp   = useRef(new Animated.Value(0)).current;
+  const explainOp   = useRef(new Animated.Value(0)).current;
+  const stripAnims  = useRef([...Array(4)].map(() => new Animated.Value(0))).current;
+  const crossOp     = useRef(new Animated.Value(0)).current;
+  const depthGrad   = useRef(new Animated.Value(0)).current;  // bottom gradient hint
 
+  // ── Open / Close ──
   useEffect(() => {
     if (visible) {
-      setToday(null);
-      setReading('');
-      textOpacity.setValue(0);
-      fetchToday();
+      setCard(null);
+      setExpanded(false);
+      resetAnims();
+      fetchCard();
       Animated.parallel([
         Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
         Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(slideAnim, { toValue: SH, duration: 250, easing: Easing.bezier(0.4, 0, 1, 1), useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: SH, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
         Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
       ]).start();
     }
   }, [visible]);
 
-  // Fade in reading text after load
+  const resetAnims = () => {
+    surfaceOp.setValue(0);
+    explainOp.setValue(0);
+    stripAnims.forEach(a => a.setValue(0));
+    crossOp.setValue(0);
+    depthGrad.setValue(0);
+  };
+
+  // ── Surface fade in after load ──
   useEffect(() => {
-    if (reading) {
-      Animated.timing(textOpacity, {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.bezier(0, 0, 0.2, 1),
-        useNativeDriver: true,
-      }).start();
+    if (card) {
+      Animated.sequence([
+        Animated.delay(200),
+        Animated.timing(surfaceOp, { toValue: 1, duration: 1000, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]).start();
+      // Subtle bottom gradient hint — "there's more below"
+      Animated.sequence([
+        Animated.delay(1500),
+        Animated.timing(depthGrad, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ]).start();
     }
-  }, [reading]);
+  }, [card]);
 
-  const [debugInfo, setDebugInfo] = useState('waiting...');
+  // ── Expand animation ──
+  useEffect(() => {
+    if (expanded) {
+      // Explanation fades in
+      Animated.timing(explainOp, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      // Strips stagger in
+      const numStrips = card?.strips?.length || 0;
+      stripAnims.forEach((anim, i) => {
+        if (i < numStrips) {
+          Animated.sequence([
+            Animated.delay(300 + i * 200),
+            Animated.timing(anim, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          ]).start();
+        }
+      });
+      // Cross system after strips
+      Animated.sequence([
+        Animated.delay(300 + (numStrips * 200) + 200),
+        Animated.timing(crossOp, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]).start();
+    } else {
+      explainOp.setValue(0);
+      stripAnims.forEach(a => a.setValue(0));
+      crossOp.setValue(0);
+    }
+  }, [expanded]);
 
-  const fetchToday = useCallback(async () => {
+  // ── Fetch ──
+  const fetchCard = useCallback(async () => {
     setLoading(true);
-    setDebugInfo('fetching...');
     try {
-      const r = await fetch(`${API_BASE}/today`, {
+      const r = await fetch(`${API}/today`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kundli_data: kundliData || { raw: { birth_details: { year: 1976, month: 7, day: 28, hour: 9, minute: 30, latitude: 25.35, longitude: 74.64 } } },
-        }),
+        body: JSON.stringify({ kundli_data: kundliData }),
       });
-      setDebugInfo('status: ' + r.status);
       const data = await r.json();
-      setDebugInfo('s:' + r.status + ' | keys: ' + Object.keys(data).join(',') + ' | ' + JSON.stringify(data.detail).substring(0, 300));
-      setToday(data.today || null);
-      setReading(data.reading || '');
+      setCard(data);
     } catch (e) {
-      setDebugInfo('ERROR: ' + e.message);
-      console.log('Today error:', e);
+      console.log('Today fetch error:', e);
     }
     setLoading(false);
   }, [kundliData]);
+
+  // ── Tap surface → expand ──
+  const handleSurfaceTap = () => {
+    if (!expanded && card) setExpanded(true);
+  };
+
+  // ── Tap strip → navigate to feature ──
+  const handleStripTap = (strip) => {
+    if (onNavigate) {
+      onNavigate({ route: strip.route, system: strip.system, reason: strip.reason });
+    }
+  };
+
+  // ── Scroll handler — collapse when scrolled back to top ──
+  const handleScroll = (e) => {
+    const y = e.nativeEvent.contentOffset.y;
+    if (expanded && y <= 0) {
+      setExpanded(false);
+    }
+  };
 
   if (!visible) return null;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <Animated.View style={[s.backdrop, { opacity: fadeAnim }]}>
+      {/* Backdrop */}
+      <Animated.View style={[st.backdrop, { opacity: fadeAnim }]}>
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
       </Animated.View>
 
-      <Animated.View style={[s.sheet, { transform: [{ translateY: slideAnim }] }]}>
-        <View style={s.handleWrap}><View style={s.handle} /></View>
-        <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={s.closeText}>✕</Text>
+      {/* Sheet */}
+      <Animated.View style={[st.sheet, { transform: [{ translateY: slideAnim }] }]}>
+        <View style={st.handleWrap}><View style={st.handle} /></View>
+        <TouchableOpacity style={st.closeBtn} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={st.closeX}>✕</Text>
         </TouchableOpacity>
 
-        <Text style={{color:'yellow',fontSize:12,padding:10,backgroundColor:'rgba(255,0,0,0.2)'}}>{debugInfo}</Text>
-
         {loading ? (
-          <View style={s.loadCenter}>
-            <ActivityIndicator color={W(0.2)} size="small" />
+          <View style={st.loadCenter}>
+            <ActivityIndicator color={W(0.15)} size="small" />
           </View>
-        ) : today ? (
-          <View style={t.content}>
-            {/* Date — very subtle */}
-            <Text style={t.date}>{today.date}</Text>
+        ) : card ? (
+          <ScrollView
+            style={st.scroll}
+            contentContainerStyle={st.scrollContent}
+            showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+          >
+            {/* ═══ SURFACE ═══ */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={handleSurfaceTap}
+              style={[st.surfaceWrap, !expanded && st.surfaceCentered]}
+            >
+              <Animated.View style={{ opacity: surfaceOp }}>
+                {/* Insight */}
+                <Text style={[st.insight, expanded && { opacity: 0.5 }]}>{card.surface?.insight}</Text>
 
-            {/* Day context — single quiet line */}
-            <Text style={t.context}>
-              {today.day_lord} day · Moon in {today.moon_transit}
-              {today.retro_planets?.length > 0 ? ` · ${today.retro_planets.join(', ')} retrograde` : ''}
-            </Text>
+                {/* Attribution */}
+                <Text style={st.attribution}>{card.surface?.attribution}</Text>
+              </Animated.View>
+            </TouchableOpacity>
 
-            {/* The reading — the main content, no heading */}
-            <Animated.View style={[t.readingWrap, { opacity: textOpacity }]}>
-              <Text style={t.reading}>{reading}</Text>
-            </Animated.View>
+            {/* ═══ DEPTH GRADIENT HINT ═══ */}
+            {!expanded && (
+              <Animated.View style={[st.depthHint, { opacity: depthGrad }]}>
+                <View style={st.depthLine} />
+              </Animated.View>
+            )}
 
-            {/* Panchanga line — very subtle */}
-            {today.tithi ? (
-              <Text style={t.panchanga}>
-                {today.tithi}{today.paksha ? ` · ${today.paksha}` : ''}
-                {today.yoga ? ` · ${today.yoga}` : ''}
-              </Text>
-            ) : null}
+            {/* ═══ EXPANDED LAYERS ═══ */}
+            {expanded && (
+              <View style={st.layers}>
 
-            {/* Dasha — only if it matters, in gold */}
-            {today.dasha ? (
-              <Text style={t.dasha}>{today.dasha}</Text>
-            ) : null}
+                {/* ── Explanation ── */}
+                <Animated.View style={[st.explainWrap, { opacity: explainOp }]}>
+                  <Text style={st.explain}>{card.explanation}</Text>
+                </Animated.View>
 
-            {/* ─── Image zone at bottom ─── */}
-            <View style={t.imageZone}>
-              {/* Image will be inserted here */}
-              <View style={t.imgPlaceholder} />
-            </View>
-          </View>
+                {/* ── Strips ── */}
+                {card.strips?.map((strip, i) => (
+                  <Animated.View
+                    key={strip.route + i}
+                    style={[
+                      st.stripWrap,
+                      {
+                        opacity: stripAnims[i],
+                        transform: [{
+                          translateY: stripAnims[i].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [12, 0],
+                          }),
+                        }],
+                      },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={st.strip}
+                      activeOpacity={0.6}
+                      onPress={() => handleStripTap(strip)}
+                    >
+                      <Text style={st.stripText}>{strip.question}</Text>
+                      <Text style={st.stripArrow}>›</Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ))}
+
+                {/* ── Cross-system ── */}
+                {card.cross_system?.available && (
+                  <Animated.View style={[st.crossWrap, { opacity: crossOp }]}>
+                    <TouchableOpacity
+                      style={st.crossStrip}
+                      activeOpacity={0.6}
+                      onPress={() => onNavigate && onNavigate({
+                        route: 'cross-system-today',
+                        systems: card.cross_system.systems,
+                      })}
+                    >
+                      <Text style={st.crossText}>{card.cross_system.question}</Text>
+                    </TouchableOpacity>
+
+                    {/* Six-system teaser */}
+                    {card.cross_system.six_system_label ? (
+                      <TouchableOpacity
+                        style={st.sixWrap}
+                        activeOpacity={0.5}
+                        onPress={() => onNavigate && onNavigate({
+                          route: 'six-system-today',
+                          systems: card.cross_system.systems,
+                        })}
+                      >
+                        <Text style={st.sixText}>{card.cross_system.six_system_label}</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </Animated.View>
+                )}
+
+                {/* Bottom breathing room */}
+                <View style={{ height: 80 }} />
+              </View>
+            )}
+          </ScrollView>
         ) : null}
       </Animated.View>
     </View>
@@ -144,88 +272,138 @@ export default function TodayScreen({ visible, onClose, kundliData }) {
 }
 
 
-const t = StyleSheet.create({
-  content: {
-    flex: 1,
-    paddingHorizontal: 30,
-    paddingTop: 30,
-    justifyContent: 'flex-start',
-  },
+// ═══════════════════════════════════════════════════════════════
+// STYLES
+// ═══════════════════════════════════════════════════════════════
 
-  date: {
-    fontSize: 12,
-    color: W(0.2),
-    letterSpacing: 1,
-    fontWeight: '300',
-    marginBottom: 6,
-  },
-
-  context: {
-    fontSize: 12,
-    color: W(0.12),
-    letterSpacing: 0.5,
-    fontWeight: '300',
-    marginBottom: 40,
-  },
-
-  readingWrap: {
-    marginBottom: 40,
-  },
-
-  reading: {
-    fontFamily: 'PlayfairDisplay',
-    fontSize: 19,
-    color: W(0.8),
-    lineHeight: 32,
-    fontWeight: '400',
-  },
-
-  panchanga: {
-    fontSize: 11,
-    color: W(0.1),
-    letterSpacing: 0.8,
-    fontWeight: '300',
-    marginBottom: 8,
-  },
-
-  dasha: {
-    fontSize: 11,
-    color: GOLD,
-    opacity: 0.3,
-    letterSpacing: 1,
-    fontWeight: '400',
-    marginBottom: 30,
-  },
-
-  // Image zone at bottom
-  imageZone: {
-    flex: 1,
-    minHeight: 160,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 30,
-  },
-
-  imgPlaceholder: {
-    width: SW * 0.6,
-    height: 120,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: W(0.025),
-    backgroundColor: W(0.005),
-  },
-});
-
-const s = StyleSheet.create({
+const st = StyleSheet.create({
+  // ── Shell ──
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)' },
   sheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: SH * 0.88,
-    backgroundColor: '#030303', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    borderTopWidth: 0.5, borderColor: W(0.05),
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    height: SH * 0.92,
+    backgroundColor: '#040404',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    borderTopWidth: 0.5, borderColor: W(0.04),
   },
   handleWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
-  handle: { width: 36, height: 3.5, borderRadius: 2, backgroundColor: W(0.08) },
+  handle: { width: 36, height: 3.5, borderRadius: 2, backgroundColor: W(0.06) },
   closeBtn: { position: 'absolute', top: 14, right: 20, zIndex: 10 },
-  closeText: { fontSize: 18, color: W(0.2), fontWeight: '300' },
+  closeX: { fontSize: 18, color: W(0.15), fontWeight: '300' },
   loadCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  // ── Scroll ──
+  scroll: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+
+  // ── Surface ──
+  surfaceWrap: {
+    paddingHorizontal: 32,
+    paddingTop: 20,
+  },
+  surfaceCentered: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 60,
+  },
+  insight: {
+    fontFamily: 'PlayfairDisplay',
+    fontSize: 22,
+    color: W(0.85),
+    lineHeight: 34,
+    fontWeight: '400',
+    letterSpacing: 0.2,
+  },
+  attribution: {
+    fontSize: 11,
+    color: W(0.12),
+    letterSpacing: 1.2,
+    fontWeight: '300',
+    marginTop: 20,
+    textTransform: 'lowercase',
+  },
+
+  // ── Depth hint ──
+  depthHint: {
+    alignItems: 'center',
+    paddingBottom: 40,
+  },
+  depthLine: {
+    width: 24,
+    height: 1,
+    backgroundColor: W(0.04),
+    borderRadius: 1,
+  },
+
+  // ── Expanded layers ──
+  layers: {
+    paddingHorizontal: 32,
+    paddingTop: 40,
+  },
+
+  // ── Explanation ──
+  explainWrap: {
+    marginBottom: 48,
+  },
+  explain: {
+    fontSize: 15,
+    color: W(0.5),
+    lineHeight: 24,
+    fontWeight: '300',
+    letterSpacing: 0.2,
+  },
+
+  // ── Strips ──
+  stripWrap: {
+    marginBottom: 1,
+  },
+  strip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 18,
+    borderTopWidth: 0.5,
+    borderTopColor: W(0.03),
+  },
+  stripText: {
+    flex: 1,
+    fontSize: 14,
+    color: W(0.6),
+    fontWeight: '400',
+    lineHeight: 20,
+    letterSpacing: 0.15,
+  },
+  stripArrow: {
+    fontSize: 20,
+    color: W(0.1),
+    marginLeft: 12,
+    fontWeight: '300',
+  },
+
+  // ── Cross-system ──
+  crossWrap: {
+    marginTop: 40,
+    paddingTop: 24,
+    borderTopWidth: 0.5,
+    borderTopColor: W(0.03),
+  },
+  crossStrip: {
+    paddingVertical: 16,
+  },
+  crossText: {
+    fontSize: 13,
+    color: GOLD,
+    opacity: 0.4,
+    fontWeight: '400',
+    letterSpacing: 0.3,
+  },
+  sixWrap: {
+    paddingVertical: 12,
+  },
+  sixText: {
+    fontSize: 12,
+    color: W(0.15),
+    fontWeight: '300',
+    letterSpacing: 0.5,
+  },
 });

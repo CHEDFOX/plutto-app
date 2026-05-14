@@ -1,109 +1,169 @@
 /**
- * MEDIA CACHE — Smart image loading with server-side cache busting.
- * 
- * How it works:
- * 1. On app start, calls /media-manifest to get all file modification times
- * 2. Compares with locally stored manifest (AsyncStorage)
- * 3. Builds image URLs with ?v=timestamp — React Native caches by full URL
- * 4. When you replace an image on the server, its timestamp changes
- * 5. New timestamp = new URL = fresh fetch. Same timestamp = cached version.
- * 
- * Result: images cached forever until you change them on the server.
+ * MEDIA CACHE — Downloads and caches all static media.
+ * Checks backend manifest. Only re-downloads when hash changes.
+ * Components use getMediaUri('transitions/lens_change.mp4') to get local path.
+ *
+ * Flow:
+ * 1. App launch → initMediaCache()
+ * 2. Fetches /media-manifest (list of files + hashes)
+ * 3. Compares with locally stored manifest
+ * 4. Downloads only changed/new files
+ * 5. Components call getMediaUri(path) → returns local file:// URI
+ * 6. If not cached yet, falls back to remote URL
  */
-
-import { Image } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setManifest as setRemoteManifest } from '../components/RemoteMedia';
 
-const API = 'https://api.plutto.space/api/public';
-const BASE = 'https://api.plutto.space/static';
-const MANIFEST_KEY = '@media_manifest';
+const API = 'https://api.plutto.space';
+const MANIFEST_URL = `${API}/api/public/media-manifest`;
+const CACHE_DIR = `${FileSystem.cacheDirectory}plutto_media/`;
+const MANIFEST_KEY = 'media_manifest_local';
 
-let manifest = {};    // { "planets/Saturn.png": 1718400000, ... }
-let ready = false;
+let localManifest = {}; // { "transitions/lens_change.mp4": { hash: "abc123", localUri: "file://..." } }
+let initialized = false;
 
-// ─── Initialize on app start ───
+/**
+ * Initialize media cache. Call once on app launch.
+ * Downloads any new/changed media in background.
+ */
 export async function initMediaCache() {
   try {
-    // Load stored manifest
+    // Ensure cache directory exists
+    const dirInfo = await FileSystem.getInfoAsync(CACHE_DIR);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true });
+    }
+
+    // Load local manifest from AsyncStorage
     const stored = await AsyncStorage.getItem(MANIFEST_KEY);
-    const old = stored ? JSON.parse(stored) : {};
-
-    // Fetch fresh manifest from server
-    const res = await fetch(`${API}/media-manifest`);
-    const data = await res.json();
-    manifest = data.files || {};
-
-    // Find changed files
-    const changed = [];
-    for (const [path, mtime] of Object.entries(manifest)) {
-      if (old[path] !== mtime) changed.push(path);
+    if (stored) {
+      localManifest = JSON.parse(stored);
     }
 
-    // Prefetch changed images (cache bust with new version)
-    if (changed.length > 0) {
-      console.log(`[MediaCache] ${changed.length} images updated, prefetching...`);
-      changed.forEach(path => {
-        const url = `${BASE}/${path}?v=${manifest[path]}`;
-        Image.prefetch(url).catch(() => {});
-      });
-    } else {
-      console.log('[MediaCache] All images up to date');
+    // Fetch remote manifest
+    const resp = await fetch(MANIFEST_URL);
+    if (!resp.ok) {
+      console.log('[MediaCache] Manifest fetch failed, using local cache');
+      initialized = true;
+      return;
+    }
+    const remote = await resp.json();
+    const remoteFiles = remote.files || {};
+
+    // Compare and download changes
+    let changed = 0;
+    const downloads = [];
+
+    for (const [path, info] of Object.entries(remoteFiles)) {
+      const local = localManifest[path];
+      if (local && local.hash === info.hash) continue; // unchanged
+
+      // Need to download this file
+      downloads.push({ path, hash: info.hash });
     }
 
-    // Prefetch any images not yet cached (first install)
-    if (!stored) {
-      console.log(`[MediaCache] First run, prefetching all ${Object.keys(manifest).length} images...`);
-      Object.entries(manifest).forEach(([path, mtime]) => {
-        Image.prefetch(`${BASE}/${path}?v=${mtime}`).catch(() => {});
-      });
+    // Remove files that no longer exist on backend
+    for (const path of Object.keys(localManifest)) {
+      if (!remoteFiles[path]) {
+        const localPath = CACHE_DIR + path.replace(/\//g, '_');
+        try { await FileSystem.deleteAsync(localPath, { idempotent: true }); } catch (_) {}
+        delete localManifest[path];
+      }
     }
 
-    // Store new manifest
-    await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
-    setRemoteManifest(manifest);
-    ready = true;
+    if (downloads.length === 0) {
+      console.log('[MediaCache] All media up to date');
+      initialized = true;
+      return;
+    }
+
+    console.log(`[MediaCache] Downloading ${downloads.length} files...`);
+
+    // Download in parallel (max 3 concurrent)
+    const batchSize = 3;
+    for (let i = 0; i < downloads.length; i += batchSize) {
+      const batch = downloads.slice(i, i + batchSize);
+      await Promise.all(batch.map(async ({ path, hash }) => {
+        try {
+          const remoteUrl = `${API}/static/${path}`;
+          const localPath = CACHE_DIR + path.replace(/\//g, '_');
+          const result = await FileSystem.downloadAsync(remoteUrl, localPath);
+          if (result.status === 200) {
+            localManifest[path] = { hash, localUri: localPath };
+            changed++;
+            console.log(`[MediaCache] Downloaded: ${path}`);
+          }
+        } catch (e) {
+          console.log(`[MediaCache] Failed: ${path}`, e.message);
+        }
+      }));
+    }
+
+    // Save updated manifest
+    await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(localManifest));
+    console.log(`[MediaCache] ${changed} files updated`);
+    initialized = true;
   } catch (e) {
-    console.log('[MediaCache] Manifest fetch failed, using cached:', e.message);
-    try {
-      const stored = await AsyncStorage.getItem(MANIFEST_KEY);
-      if (stored) { manifest = JSON.parse(stored); setRemoteManifest(manifest); }
-    } catch (_) {}
-    ready = true;
+    console.log('[MediaCache] Init error:', e.message);
+    initialized = true; // still mark as initialized so fallback works
   }
 }
 
-// ─── Get versioned image source ───
-// Usage: imageSource('planets/Saturn.png') → { uri: 'https://...?v=1718400000' }
-export function imageSource(path) {
-  const mtime = manifest[path];
-  if (!mtime) return null;  // file doesn't exist on server
-  return { uri: `${BASE}/${path}?v=${mtime}` };
+/**
+ * Get local URI for a media file. Falls back to remote URL if not cached.
+ * @param {string} path - Relative path like "transitions/lens_change.mp4"
+ * @returns {string} Local file URI or remote URL
+ */
+export function getMediaUri(path) {
+  const local = localManifest[path];
+  if (local && local.localUri) {
+    return local.localUri;
+  }
+  // Fallback to remote URL
+  return `${API}/static/${path}`;
 }
 
-// ─── Convenience getters ───
-export function planetImage(name) { return imageSource(`planets/${name}.png`); }
-export function systemImage(id) {
-  const map = { bphs: 'vedic', kp: 'kp', western: 'western', chinese: 'chinese', numerology: 'numerology', mandala: 'mandala' };
-  return imageSource(`systems/${map[id] || id}.png`);
-}
-export function chapterImage(index) { return imageSource(`features/vedic/chapters/ch${index}.png`); }
-export function featureImage(systemDir, featureId) { return imageSource(`features/${systemDir}/${featureId}.png`); }
-
-// ─── All images for a category ───
-export function allPlanets() {
-  return ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu']
-    .map(n => ({ name: n, source: planetImage(n) }))
-    .filter(p => p.source !== null);
+/**
+ * Check if a specific file is cached locally.
+ * @param {string} path
+ * @returns {boolean}
+ */
+export function isMediaCached(path) {
+  return !!(localManifest[path] && localManifest[path].localUri);
 }
 
-export function allChapters() {
-  return Array.from({ length: 12 }, (_, i) => ({
-    index: i + 1,
-    source: chapterImage(i + 1),
-  })).filter(c => c.source !== null);
+/**
+ * Force re-download a specific file (e.g., after error).
+ * @param {string} path
+ */
+export async function refreshMedia(path) {
+  try {
+    const remoteUrl = `${API}/static/${path}`;
+    const localPath = CACHE_DIR + path.replace(/\//g, '_');
+    const result = await FileSystem.downloadAsync(remoteUrl, localPath);
+    if (result.status === 200) {
+      // Fetch hash from manifest
+      const resp = await fetch(MANIFEST_URL);
+      const remote = await resp.json();
+      const hash = remote.files?.[path]?.hash || Date.now().toString();
+      localManifest[path] = { hash, localUri: localPath };
+      await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(localManifest));
+    }
+  } catch (e) {
+    console.log(`[MediaCache] Refresh failed: ${path}`, e.message);
+  }
 }
 
-// ─── Check if an image exists on server ───
-export function hasImage(path) { return !!manifest[path]; }
-export function isReady() { return ready; }
+/**
+ * Clear all cached media.
+ */
+export async function clearMediaCache() {
+  try {
+    await FileSystem.deleteAsync(CACHE_DIR, { idempotent: true });
+    localManifest = {};
+    await AsyncStorage.removeItem(MANIFEST_KEY);
+    console.log('[MediaCache] Cache cleared');
+  } catch (e) {
+    console.log('[MediaCache] Clear error:', e.message);
+  }
+}

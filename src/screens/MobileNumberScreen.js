@@ -1,17 +1,18 @@
 /**
- * MOBILE NUMBER SCREEN — Rotary Phone Dial
- *
- * User ROTATES the whole wheel. When a number aligns with
- * the dip circle at the bottom and is held — number is typed.
- * Release → wheel springs back. ✕ backspace. RING to send.
+ * MOBILE NUMBER — Pure Vedic-style rotation.
+ * No Animated.Value for rotation. requestAnimationFrame + useState only.
+ * Dip detection runs directly in PanResponder move handler.
+ * Spring-back via requestAnimationFrame.
  */
-
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Animated, Easing, Dimensions, ActivityIndicator, PanResponder,
+  Animated, Easing, Dimensions, PanResponder, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental)
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const GOLD = '#D4AF37';
@@ -24,102 +25,128 @@ const ORBIT_R = DIAL_R - 22;
 const NUM_SIZE = 36;
 const DIP_R = 28;
 const COUNT = 10;
-const ANGLE_STEP = (2 * Math.PI) / (COUNT + 1); // 11 slots: 10 digits + 1 gap for dip
-const DIP_GAP = 0.2; // extra breathing room
+const DIP_GAP = 0.2;
 const ARC_FOR_DIGITS = (2 * Math.PI) - (2 * DIP_GAP);
 const DIGIT_STEP = ARC_FOR_DIGITS / COUNT;
 const BOTTOM = Math.PI / 2;
-
 const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
-
-// Dip is at the bottom. Digits arranged clockwise starting just after the gap.
 const BASE_ANGLES = DIGITS.map((_, i) => BOTTOM + DIP_GAP + (i + 0.5) * DIGIT_STEP);
+const DIP_THRESHOLD = 0.15;
 
+function RevealCTA({ text, onPress }) {
+  return (
+    <TouchableOpacity activeOpacity={0.6} onPress={onPress} style={ctaS.ctaTouch}>
+      <View style={ctaS.ctaBox}><Text style={ctaS.ctaText}>{text}</Text><Text style={ctaS.ctaArrow}>→</Text></View>
+    </TouchableOpacity>
+  );
+}
 
 export default function MobileNumberScreen({ visible, onClose, kundliData }) {
   const [typed, setTyped] = useState('');
-  const [phase, setPhase] = useState('dial');
+  const [phase, setPhase] = useState('dial'); // dial | sending | result
   const [mobileData, setMobileData] = useState(null);
   const [reading, setReading] = useState('');
-  const [nearDigit, setNearDigit] = useState(null); // which digit is near dip
+  const [nearDigit, setNearDigit] = useState(null);
   const [dipGold, setDipGold] = useState(false);
+  const [revealLevel, setRevealLevel] = useState(0);
 
-  const rotation = useRef(new Animated.Value(0)).current;
-  const currentRot = useRef(0);
-  const lastAngle = useRef(0);
+  // Pure Vedic rotation
+  const rot = useRef(0);
+  const [rotVal, setRotVal] = useState(0);
+  const lastAng = useRef(0);
+  const springRunning = useRef(false);
+
+  // Dip detection refs
   const holdTimer = useRef(null);
-  const nearDigitRef = useRef(null);
+  const nearRef = useRef(null);
   const typedRef = useRef('');
-
-  // Keep typedRef in sync
   useEffect(() => { typedRef.current = typed; }, [typed]);
 
+  // Visual-only animations (not rotation)
   const slideAnim = useRef(new Animated.Value(SH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const dipVibrateX = useRef(new Animated.Value(0)).current;
   const resultOpacity = useRef(new Animated.Value(0)).current;
+  const dipVibrateX = useRef(new Animated.Value(0)).current;
   const vibrateAnim = useRef(null);
 
-  // Track rotation value and detect digit near dip
-  const [positions, setPositions] = useState(() => BASE_ANGLES.map(a => a));
-
-  const checkNearDip = useCallback((rotValue) => {
-    let closest = null;
-    let closestDist = Infinity;
+  // Check which digit is near dip at current rotation
+  const checkDip = useCallback((rotValue) => {
+    let closest = null, closestDist = Infinity;
     for (let i = 0; i < COUNT; i++) {
       const angle = BASE_ANGLES[i] + rotValue;
       const norm = ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
       const d = Math.min(Math.abs(norm - BOTTOM), 2 * Math.PI - Math.abs(norm - BOTTOM));
       if (d < closestDist) { closestDist = d; closest = i; }
     }
-    if (closestDist < 0.15) {
-      return closest;
+    return closestDist < DIP_THRESHOLD ? closest : null;
+  }, []);
+
+  // Update dip state — called from pan move and spring-back
+  const updateDip = useCallback((rotValue) => {
+    const near = checkDip(rotValue);
+    const prev = nearRef.current;
+
+    if (near !== null && prev !== near) {
+      // New digit entered dip
+      nearRef.current = near;
+      setNearDigit(near);
+      setDipGold(true);
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+      holdTimer.current = setTimeout(() => {
+        if (nearRef.current !== null && typedRef.current.length < 15) {
+          setTyped(p => p + String(DIGITS[nearRef.current]));
+        }
+        holdTimer.current = null;
+      }, 400);
+    } else if (near === null && prev !== null) {
+      // Digit left dip
+      nearRef.current = null;
+      setNearDigit(null);
+      setDipGold(false);
+      if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
     }
-    return null;
+  }, [checkDip]);
+
+  // Spring back to 0 using requestAnimationFrame
+  const springBack = useCallback(() => {
+    springRunning.current = true;
+    const start = rot.current;
+    const duration = Math.min(800, Math.abs(start) * 200 + 200); // proportional
+    const startTime = Date.now();
+
+    const step = () => {
+      if (!springRunning.current) return;
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      // Cubic ease-out
+      const eased = 1 - Math.pow(1 - t, 3);
+      rot.current = start * (1 - eased);
+      setRotVal(rot.current);
+
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        rot.current = 0;
+        setRotVal(0);
+        springRunning.current = false;
+      }
+    };
+    requestAnimationFrame(step);
   }, []);
 
   useEffect(() => {
-    const id = rotation.addListener(({ value }) => {
-      currentRot.current = value;
-      setPositions(BASE_ANGLES.map(a => a + value));
-      const near = checkNearDip(value);
-      const prevNear = nearDigitRef.current;
-
-      if (near !== null && prevNear !== near) {
-        // New digit entered dip zone — start hold timer
-        nearDigitRef.current = near;
-        setNearDigit(near);
-        setDipGold(true);
-        if (holdTimer.current) clearTimeout(holdTimer.current);
-        holdTimer.current = setTimeout(() => {
-          // Type the digit
-          if (nearDigitRef.current !== null && typedRef.current.length < 15) {
-            const digit = DIGITS[nearDigitRef.current];
-            setTyped(prev => prev + String(digit));
-          }
-          holdTimer.current = null;
-        }, 400);
-      } else if (near === null && prevNear !== null) {
-        // Digit left dip zone — cancel timer
-        nearDigitRef.current = null;
-        setNearDigit(null);
-        setDipGold(false);
-        if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
-      }
-    });
-    return () => rotation.removeListener(id);
-  }, [checkNearDip]);
-
-  useEffect(() => {
     if (visible) {
-      setTyped(''); setPhase('dial'); setMobileData(null); setReading('');
+      setTyped(''); setPhase('dial'); setMobileData(null); setReading(''); setRevealLevel(0);
       resultOpacity.setValue(0); dipVibrateX.setValue(0);
-      rotation.setValue(0); currentRot.current = 0;
+      rot.current = 0; setRotVal(0);
+      springRunning.current = false;
+      nearRef.current = null; setNearDigit(null); setDipGold(false);
       Animated.parallel([
         Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
         Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
     } else {
+      springRunning.current = false;
       if (vibrateAnim.current) vibrateAnim.current.stop();
       if (holdTimer.current) clearTimeout(holdTimer.current);
       Animated.parallel([
@@ -129,33 +156,41 @@ export default function MobileNumberScreen({ visible, onClose, kundliData }) {
     }
   }, [visible]);
 
-  // Pan to rotate the wheel
-  const panResponder = useRef(PanResponder.create({
+  // PanResponder — exact same physics as Vedic wheel
+  const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 3 || Math.abs(gs.dy) > 3,
-    onPanResponderGrant: (evt) => {
-      rotation.stopAnimation();
-      const t = evt.nativeEvent;
-      lastAngle.current = Math.atan2(t.locationY - DIAL_R, t.locationX - DIAL_R);
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (e) => {
+      springRunning.current = false; // stop any spring animation
+      lastAng.current = Math.atan2(
+        e.nativeEvent.locationY - DIAL_R,
+        e.nativeEvent.locationX - DIAL_R
+      );
     },
-    onPanResponderMove: (evt) => {
-      const t = evt.nativeEvent;
-      const curr = Math.atan2(t.locationY - DIAL_R, t.locationX - DIAL_R);
-      let delta = curr - lastAngle.current;
-      if (delta > Math.PI) delta -= 2 * Math.PI;
-      if (delta < -Math.PI) delta += 2 * Math.PI;
-      currentRot.current += delta;
-      rotation.setValue(currentRot.current);
-      lastAngle.current = curr;
+    onPanResponderMove: (e) => {
+      const a = Math.atan2(
+        e.nativeEvent.locationY - DIAL_R,
+        e.nativeEvent.locationX - DIAL_R
+      );
+      let d = a - lastAng.current;
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      rot.current += d;
+      setRotVal(rot.current);
+      lastAng.current = a;
+
+      // Check dip detection inline
+      updateDip(rot.current);
     },
     onPanResponderRelease: () => {
+      // Clear dip state
       if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
-      nearDigitRef.current = null;
+      nearRef.current = null;
       setNearDigit(null);
       setDipGold(false);
-      Animated.spring(rotation, {
-        toValue: 0, tension: 50, friction: 10, useNativeDriver: false,
-      }).start(() => { currentRot.current = 0; });
+
+      // Spring back to 0
+      springBack();
     },
   })).current;
 
@@ -165,8 +200,6 @@ export default function MobileNumberScreen({ visible, onClose, kundliData }) {
     vibrateAnim.current = Animated.loop(Animated.sequence([
       Animated.timing(dipVibrateX, { toValue: 3, duration: 40, useNativeDriver: true }),
       Animated.timing(dipVibrateX, { toValue: -3, duration: 40, useNativeDriver: true }),
-      Animated.timing(dipVibrateX, { toValue: 2, duration: 40, useNativeDriver: true }),
-      Animated.timing(dipVibrateX, { toValue: -2, duration: 40, useNativeDriver: true }),
       Animated.timing(dipVibrateX, { toValue: 0, duration: 40, useNativeDriver: true }),
       Animated.delay(250),
     ]));
@@ -174,17 +207,25 @@ export default function MobileNumberScreen({ visible, onClose, kundliData }) {
     try {
       const r = await fetch(`${API_BASE}/mobile-number`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile: typed, kundli_data: kundliData || { raw: { birth_details: { year: 1976, month: 7, day: 28, hour: 9, minute: 30, latitude: 25.35, longitude: 74.64 } } } }),
+        body: JSON.stringify({
+          mobile: typed,
+          kundli_data: kundliData || { raw: { birth_details: { year: 1976, month: 7, day: 28, hour: 9, minute: 30, latitude: 25.35, longitude: 74.64 } } },
+        }),
       });
       const data = await r.json();
       setMobileData(data.mobile_data || null);
       setReading(data.reading || '');
-    } catch (e) { console.log('Mobile error:', e); }
+    } catch (e) { console.log('Mobile err:', e); }
     if (vibrateAnim.current) vibrateAnim.current.stop();
     dipVibrateX.setValue(0);
-    setPhase('result');
+    setPhase('result'); setRevealLevel(0);
     Animated.timing(resultOpacity, { toValue: 1, duration: 1000, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: true }).start();
   }, [typed, kundliData]);
+
+  const reveal = useCallback(() => {
+    LayoutAnimation.configureNext({ duration: 400, create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity }, update: { type: LayoutAnimation.Types.easeInEaseOut } });
+    setRevealLevel(prev => prev + 1);
+  }, []);
 
   if (!visible) return null;
   const VC = { excellent: '#50C878', good: '#50C878', decent: '#C89850', caution: '#C85050', neutral: '#888' };
@@ -204,14 +245,14 @@ export default function MobileNumberScreen({ visible, onClose, kundliData }) {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent} bounces={false}>
           {(phase === 'dial' || phase === 'sending') && (
             <>
-              {/* Rotary dial */}
+              {/* Rotary Dial */}
               <View style={[ds.dialWrap, { width: DIAL_SIZE, height: DIAL_SIZE }]}>
                 <Svg width={DIAL_SIZE} height={DIAL_SIZE} style={StyleSheet.absoluteFill}>
                   <SvgCircle cx={DIAL_R} cy={DIAL_R} r={ORBIT_R + NUM_SIZE / 2 + 6} stroke={W(0.04)} strokeWidth={0.5} fill="none" />
                   <SvgCircle cx={DIAL_R} cy={DIAL_R} r={ORBIT_R - NUM_SIZE / 2 - 2} stroke={W(0.03)} strokeWidth={0.3} fill="none" strokeDasharray="3,8" />
                 </Svg>
 
-                {/* Dip circle — fixed at bottom, does NOT rotate */}
+                {/* Dip circle — fixed at bottom */}
                 <Animated.View style={[ds.dipCircle, {
                   left: DIAL_R + ORBIT_R * Math.cos(BOTTOM) - DIP_R,
                   top: DIAL_R + ORBIT_R * Math.sin(BOTTOM) - DIP_R,
@@ -222,30 +263,29 @@ export default function MobileNumberScreen({ visible, onClose, kundliData }) {
                   {phase === 'sending' && <View style={ds.dipDot} />}
                 </Animated.View>
 
-                {/* Touch zone for rotation */}
-                <View {...panResponder.panHandlers} style={[ds.touchZone, { width: DIAL_SIZE, height: DIAL_SIZE }]}>
-                  {/* Digit nodes — rotate with wheel */}
-                  {DIGITS.map((digit, i) => {
-                    const angle = positions[i];
-                    const x = DIAL_R + ORBIT_R * Math.cos(angle) - NUM_SIZE / 2;
-                    const y = DIAL_R + ORBIT_R * Math.sin(angle) - NUM_SIZE / 2;
-                    const isNear = nearDigit === i;
+                {/* Digit nodes — positioned from rotVal state */}
+                {DIGITS.map((digit, i) => {
+                  const angle = BASE_ANGLES[i] + rotVal;
+                  const x = DIAL_R + ORBIT_R * Math.cos(angle) - NUM_SIZE / 2;
+                  const y = DIAL_R + ORBIT_R * Math.sin(angle) - NUM_SIZE / 2;
+                  const isNear = nearDigit === i;
 
-                    return (
-                      <View key={digit} style={[ds.digitNode, {
-                        left: x, top: y,
-                        width: NUM_SIZE, height: NUM_SIZE, borderRadius: NUM_SIZE / 2,
-                        borderColor: isNear ? GOLD : W(0.06),
-                        backgroundColor: isNear ? `${GOLD}10` : W(0.01),
-                      }]}>
-                        <Text style={[ds.digitText, isNear && { color: GOLD }]}>{digit}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
+                  return (
+                    <View key={digit} style={[ds.digitNode, {
+                      left: x, top: y, width: NUM_SIZE, height: NUM_SIZE, borderRadius: NUM_SIZE / 2,
+                      borderColor: isNear ? GOLD : W(0.06),
+                      backgroundColor: isNear ? `${GOLD}10` : W(0.01),
+                    }]}>
+                      <Text style={[ds.digitText, isNear && { color: GOLD }]}>{digit}</Text>
+                    </View>
+                  );
+                })}
+
+                {/* Touch zone */}
+                <View {...pan.panHandlers} style={[ds.touchZone, { width: DIAL_SIZE, height: DIAL_SIZE }]} />
               </View>
 
-              {/* Typed number — lower */}
+              {/* Typed number */}
               <View style={ds.typedSection}>
                 <View style={ds.typedRow}>
                   <Text style={ds.typedNumber}>{typed || '—'}</Text>
@@ -255,20 +295,17 @@ export default function MobileNumberScreen({ visible, onClose, kundliData }) {
                     </TouchableOpacity>
                   )}
                 </View>
-
                 {typed.length >= 4 && phase === 'dial' && (
                   <TouchableOpacity onPress={handleSend} activeOpacity={0.6} style={ds.ringBtn}>
                     <Text style={ds.ringText}>RING</Text>
                   </TouchableOpacity>
                 )}
-
-                {phase === 'sending' && (
-                  <Text style={ds.sendingText}>ringing...</Text>
-                )}
+                {phase === 'sending' && <Text style={ds.sendingText}>ringing...</Text>}
               </View>
             </>
           )}
 
+          {/* Results — Progressive Disclosure */}
           {phase === 'result' && mobileData && (
             <Animated.View style={[rs.resultWrap, { opacity: resultOpacity }]}>
               <Text style={rs.number}>{mobileData.mobile}</Text>
@@ -279,16 +316,28 @@ export default function MobileNumberScreen({ visible, onClose, kundliData }) {
                   <Text style={rs.vibEffect}>{mobileData.effect}</Text>
                 </View>
               </View>
-              <View style={[rs.verdictBadge, { borderColor: `${VC[mobileData.verdict] || '#888'}40`, backgroundColor: `${VC[mobileData.verdict] || '#888'}08` }]}>
-                <Text style={[rs.verdictText, { color: VC[mobileData.verdict] || '#888' }]}>{mobileData.verdict}{mobileData.is_aligned ? ' · aligned' : ''}</Text>
-              </View>
-              <View style={rs.insightRow}>
-                <View style={rs.insightBox}><Text style={rs.insightLabel}>dominant</Text><Text style={rs.insightValue}>{mobileData.dominant_digit}</Text><Text style={rs.insightVibe}>{mobileData.dominant_vibe}</Text></View>
-                <View style={rs.insightDivider} />
-                <View style={rs.insightBox}><Text style={rs.insightLabel}>last digit</Text><Text style={rs.insightValue}>{mobileData.last_digit}</Text><Text style={rs.insightVibe}>{mobileData.last_vibe}</Text></View>
-              </View>
-              <View style={rs.imgZone}><View style={rs.imgPlaceholder} /></View>
-              <Text style={rs.readingText}>{reading}</Text>
+
+              {revealLevel === 0 && <RevealCTA text="What this number means for you" onPress={reveal} />}
+
+              {revealLevel >= 1 && (
+                <>
+                  <View style={[rs.verdictBadge, { borderColor: `${VC[mobileData.verdict] || '#888'}40`, backgroundColor: `${VC[mobileData.verdict] || '#888'}08` }]}>
+                    <Text style={[rs.verdictText, { color: VC[mobileData.verdict] || '#888' }]}>{mobileData.verdict}{mobileData.is_aligned ? ' · aligned' : ''}</Text>
+                  </View>
+                  <View style={rs.insightRow}>
+                    <View style={rs.insightBox}><Text style={rs.insightLabel}>dominant</Text><Text style={rs.insightValue}>{mobileData.dominant_digit}</Text><Text style={rs.insightVibe}>{mobileData.dominant_vibe}</Text></View>
+                    <View style={rs.insightDivider} />
+                    <View style={rs.insightBox}><Text style={rs.insightLabel}>last digit</Text><Text style={rs.insightValue}>{mobileData.last_digit}</Text><Text style={rs.insightVibe}>{mobileData.last_vibe}</Text></View>
+                  </View>
+                </>
+              )}
+
+              {revealLevel === 1 && reading && <RevealCTA text="The full reading" onPress={reveal} />}
+
+              {revealLevel >= 2 && reading && (
+                <Text style={rs.readingText}>{reading}</Text>
+              )}
+
               <Text style={rs.ownerLine}>your numbers: {mobileData.owner_mulank} · {mobileData.owner_bhagyank}</Text>
             </Animated.View>
           )}
@@ -300,15 +349,19 @@ export default function MobileNumberScreen({ visible, onClose, kundliData }) {
   );
 }
 
-
+const ctaS = StyleSheet.create({
+  ctaTouch: { marginVertical: 20 },
+  ctaBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: W(0.10), paddingVertical: 18, paddingHorizontal: 22 },
+  ctaText: { fontFamily: 'PlayfairDisplay', fontSize: 16, lineHeight: 22, color: W(0.85), fontStyle: 'italic', flex: 1, marginRight: 14 },
+  ctaArrow: { fontSize: 16, color: W(0.3), fontWeight: '200' },
+});
 const ds = StyleSheet.create({
   dialWrap: { alignSelf: 'center', marginTop: 24 },
-  touchZone: { position: 'absolute', top: 0, left: 0 },
+  touchZone: { position: 'absolute', top: 0, left: 0, zIndex: 5 },
   dipCircle: { position: 'absolute', borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   dipDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: GOLD, opacity: 0.6 },
   digitNode: { position: 'absolute', borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
   digitText: { fontSize: 16, color: W(0.45), fontWeight: '300' },
-
   typedSection: { alignItems: 'center', paddingTop: 56, gap: 18 },
   typedRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   typedNumber: { fontSize: 28, color: GOLD, fontWeight: '200', letterSpacing: 5, opacity: 0.8, minHeight: 40, textAlign: 'center' },
@@ -318,7 +371,6 @@ const ds = StyleSheet.create({
   ringText: { fontSize: 13, color: GOLD, opacity: 0.6, letterSpacing: 6, fontWeight: '500' },
   sendingText: { fontSize: 11, color: W(0.12), letterSpacing: 3, fontWeight: '300' },
 });
-
 const rs = StyleSheet.create({
   resultWrap: { paddingHorizontal: 28, paddingTop: 30 },
   number: { fontSize: 22, color: GOLD, opacity: 0.3, letterSpacing: 4, fontWeight: '200', textAlign: 'center', marginBottom: 20 },
@@ -335,12 +387,9 @@ const rs = StyleSheet.create({
   insightLabel: { fontSize: 8, color: W(0.1), letterSpacing: 2, fontWeight: '500' },
   insightValue: { fontSize: 22, color: W(0.4), fontWeight: '200' },
   insightVibe: { fontSize: 10, color: W(0.2), fontWeight: '300' },
-  imgZone: { alignSelf: 'flex-end', marginBottom: 16 },
-  imgPlaceholder: { width: 65, height: 65, borderRadius: 12, borderWidth: 0.5, borderColor: W(0.02), backgroundColor: W(0.005) },
   readingText: { fontSize: 15, color: W(0.7), lineHeight: 25, fontWeight: '300', marginBottom: 18 },
   ownerLine: { fontSize: 10, color: W(0.1), letterSpacing: 1.5, fontWeight: '400', textAlign: 'center' },
 });
-
 const s = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)' },
   sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, height: SH * 0.92, backgroundColor: '#040404', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 0.5, borderColor: W(0.05) },
