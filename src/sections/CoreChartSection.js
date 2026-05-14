@@ -99,7 +99,7 @@ const s = StyleSheet.create({
   container: { paddingHorizontal: 28 },
   hookTitle: { fontFamily: 'PlayfairDisplay', fontSize: 24, lineHeight: 34, color: W(0.9), marginBottom: 14 },
   hookBody: { fontSize: 14, lineHeight: 24, color: W(0.5), fontWeight: '300', marginBottom: 4 },
-  ctaBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, paddingVertical: 18, paddingHorizontal: 22, marginVertical: 16 },
-  ctaLabel: { fontFamily: 'PlayfairDisplay', fontSize: 16, lineHeight: 22, color: W(0.88), fontStyle: 'italic', flex: 1, marginRight: 14 },
-  ctaArrow: { fontSize: 16, color: W(0.3), fontWeight: '200' },
+  ctaBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 0.5, borderColor: W(0.08), paddingVertical: 12, paddingHorizontal: 16, marginVertical: 14, borderRadius: 2 },
+  ctaLabel: { fontFamily: 'PlayfairDisplay', fontSize: 13, lineHeight: 18, color: W(0.65), fontStyle: 'italic', flex: 1, marginRight: 10 },
+  ctaArrow: { fontSize: 13, color: W(0.18), fontWeight: '200' },
 });

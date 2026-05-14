@@ -1,33 +1,15 @@
 /**
- * COMPATIBILITY SECTION — Hook on main scroll.
- * Persuasive heading + short line + intimidating CTA.
- * Tapping opens CompatibilityScreen.
+ * COMPATIBILITY SECTION — Main scroll hook.
+ * Fetches persuasive heading from backend. 7-day cache.
  */
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import React, { useRef, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity,
-  Animated, Easing, Dimensions,
-} from 'react-native';
-
-const { height: SH } = Dimensions.get('window');
-const W = (a) => `rgba(255,255,255,${a})`;
-
-function Reveal({ visible, delay = 0, children }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(24)).current;
-  useEffect(() => {
-    if (visible) {
-      opacity.setValue(0); translateY.setValue(24);
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 700, delay, easing: Easing.bezier(0.25, 0.1, 0.25, 1), useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 0, duration: 700, delay, easing: Easing.bezier(0.25, 0.1, 0.25, 1), useNativeDriver: true }),
-      ]).start();
-    }
-  }, [visible]);
-  if (!visible) return null;
-  return <Animated.View style={{ opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
-}
+const W = a => `rgba(255,255,255,${a})`;
+const API = 'https://api.plutto.space/api/public';
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_AT = 6 * 24 * 60 * 60 * 1000;
 
 function CTA({ text, onPress }) {
   const breathe = useRef(new Animated.Value(0.08)).current;
@@ -37,10 +19,9 @@ function CTA({ text, onPress }) {
       Animated.timing(breathe, { toValue: 0.08, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
     ])).start();
   }, []);
-  const borderColor = breathe.interpolate({ inputRange: [0.08, 0.18], outputRange: [W(0.08), W(0.18)] });
   return (
     <TouchableOpacity activeOpacity={0.6} onPress={onPress}>
-      <Animated.View style={[s.ctaBox, { borderColor }]}>
+      <Animated.View style={[s.ctaBox, { borderColor: breathe.interpolate({ inputRange: [0.08, 0.18], outputRange: [W(0.08), W(0.18)] }) }]}>
         <Text style={s.ctaLabel}>{text}</Text>
         <Text style={s.ctaArrow}>→</Text>
       </Animated.View>
@@ -48,27 +29,71 @@ function CTA({ text, onPress }) {
   );
 }
 
-export default function CompatibilitySection({ onOpen, onImpulse }) {
+export default function CompatibilitySection({ kundliData, onOpen, onImpulse }) {
+  const [data, setData] = useState(null);
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const slideUp = useRef(new Animated.Value(20)).current;
+
+  const fetchHook = useCallback(async () => {
+    const res = await fetch(`${API}/compatibility-hook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kundli_data: kundliData }),
+    });
+    return await res.json();
+  }, [kundliData]);
+
+  useEffect(() => {
+    if (!kundliData) return;
+    const bd = kundliData?.raw?.birth_details || {};
+    const ck = `compat_hook_${bd.year}_${bd.month}_${bd.day}`;
+
+    (async () => {
+      try {
+        const cached = await AsyncStorage.getItem(ck);
+        if (cached) {
+          const { data: cd, ts } = JSON.parse(cached);
+          const age = Date.now() - ts;
+          if (cd?.hook_title && age < CACHE_TTL) {
+            setData(cd);
+            if (age > REFRESH_AT) fetchHook().then(f => { if (f?.hook_title) { setData(f); AsyncStorage.setItem(ck, JSON.stringify({ data: f, ts: Date.now() })); } }).catch(() => {});
+            return;
+          }
+        }
+        const fresh = await fetchHook();
+        setData(fresh);
+        if (fresh?.hook_title) AsyncStorage.setItem(ck, JSON.stringify({ data: fresh, ts: Date.now() }));
+      } catch (e) {
+        try { const f = await fetchHook(); setData(f); } catch (_) {}
+      }
+    })();
+  }, [kundliData]);
+
+  useEffect(() => {
+    if (data) {
+      Animated.parallel([
+        Animated.timing(fadeIn, { toValue: 1, duration: 800, easing: Easing.bezier(0.25, 0.1, 0.25, 1), useNativeDriver: true }),
+        Animated.timing(slideUp, { toValue: 0, duration: 800, easing: Easing.bezier(0.25, 0.1, 0.25, 1), useNativeDriver: true }),
+      ]).start();
+    }
+  }, [data]);
+
+  if (!data?.hook_title) return null;
+
   return (
-    <View style={s.container}>
-      <Reveal visible={true}>
-        <Text style={s.heading}>Who are you with?</Text>
-      </Reveal>
-      <Reveal visible={true} delay={200}>
-        <Text style={s.subline}>Every connection carries a frequency. Some amplify you. Some drain you. The chart knows which.</Text>
-      </Reveal>
-      <Reveal visible={true} delay={500}>
-        <CTA text="Find out what the sky says about them" onPress={() => { if (onImpulse) onImpulse(); if (onOpen) onOpen(); }} />
-      </Reveal>
-    </View>
+    <Animated.View style={[s.container, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+      <Text style={s.hookTitle}>{data.hook_title}</Text>
+      <Text style={s.hookBody}>{data.hook_body}</Text>
+      <CTA text={data.cta_dive} onPress={() => { if (onImpulse) onImpulse(); if (onOpen) onOpen(); }} />
+    </Animated.View>
   );
 }
 
 const s = StyleSheet.create({
-  container: { paddingHorizontal: 28, minHeight: SH * 0.18, justifyContent: 'center' },
-  heading: { fontFamily: 'PlayfairDisplay', fontSize: 30, lineHeight: 42, color: W(0.93), letterSpacing: -0.3, marginBottom: 16 },
-  subline: { fontSize: 14, lineHeight: 24, color: W(0.45), fontWeight: '300', marginBottom: 32 },
-  ctaBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: W(0.10), paddingVertical: 20, paddingHorizontal: 24, marginBottom: 20 },
-  ctaLabel: { fontFamily: 'PlayfairDisplay', fontSize: 16, lineHeight: 22, color: W(0.88), fontStyle: 'italic', flex: 1, marginRight: 16 },
-  ctaArrow: { fontSize: 18, color: W(0.35), fontWeight: '200' },
+  container: { paddingHorizontal: 28 },
+  hookTitle: { fontFamily: 'PlayfairDisplay', fontSize: 24, lineHeight: 34, color: W(0.9), marginBottom: 14 },
+  hookBody: { fontSize: 14, lineHeight: 24, color: W(0.5), fontWeight: '300', marginBottom: 4 },
+  ctaBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 0.5, borderColor: W(0.08), paddingVertical: 12, paddingHorizontal: 16, marginVertical: 14, borderRadius: 2 },
+  ctaLabel: { fontFamily: 'PlayfairDisplay', fontSize: 13, lineHeight: 18, color: W(0.65), fontStyle: 'italic', flex: 1, marginRight: 10 },
+  ctaArrow: { fontSize: 13, color: W(0.18), fontWeight: '200' },
 });

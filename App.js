@@ -1,12 +1,9 @@
-/**
- * PLUTTO — Single screen. Everything wired.
- * Sections: Today → Chart Overview → Core Chart → Compatibility → Features
- */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Font from 'expo-font';
 import Starfield from './src/components/Starfield';
+import MediaView from './src/components/MediaView';
 import TodaySection from './src/sections/TodaySection';
 import ChartOverviewSection from './src/sections/ChartOverviewSection';
 import CoreChartSection from './src/sections/CoreChartSection';
@@ -17,32 +14,41 @@ import CoreChartScreen from './src/screens/CoreChartScreen';
 import CompatibilityScreen from './src/screens/CompatibilityScreen';
 import { initMediaCache } from './src/config/mediaCache';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-// Clear stale core chart cache — remove after first run
-AsyncStorage.removeItem('core_chart_1976_7_28').then(() => console.log('[Cache] Cleared core chart'));
-
 const { width: SW, height: SH } = Dimensions.get('window');
+const W = a => `rgba(255,255,255,${a})`;
+const GOLD = '#D4AF37';
 const KUNDLI = { raw: { birth_details: { year: 1976, month: 7, day: 28, hour: 9, minute: 30, latitude: 25.35, longitude: 74.64 } } };
+
+// Subtle divider between sections
+function SectionDivider({ style }) {
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  useEffect(() => { Animated.timing(fadeIn, { toValue: 1, duration: 1500, delay: 500, useNativeDriver: true }).start(); }, []);
+  return <Animated.View style={[s.divider, style, { opacity: fadeIn }]}><View style={s.divLine} /></Animated.View>;
+}
+
+// Media between sections — loads from backend, invisible if no file
+function SectionMedia({ path, height = 200 }) {
+  const [ok, setOk] = useState(false);
+  return <View style={{ width: '100%', height: ok ? height : 0, marginVertical: ok ? 0 : 0, overflow: 'hidden' }}>
+    <MediaView uri={path} style={{ width: '100%', height }} onLoaded={() => setOk(true)} />
+  </View>;
+}
+
+// Tiny section label
+function SectionLabel({ text }) {
+  return <Text style={s.sectionLabel}>{text}</Text>;
+}
 
 export default function App() {
   const [ready, setReady] = useState(false);
-
-  // Today
   const [todayData, setTodayData] = useState(null);
   const [todayVisible, setTodayVisible] = useState(false);
-
-  // Chart Overview
   const [chartData, setChartData] = useState(null);
   const [chartVisible, setChartVisible] = useState(false);
-
-  // Core Chart
   const [coreData, setCoreData] = useState(null);
   const [coreVisible, setCoreVisible] = useState(false);
-
-  // Compatibility
   const [compatVisible, setCompatVisible] = useState(false);
 
-  // Starfield
   const scrollY = useRef(new Animated.Value(0)).current;
   const impulseX = useRef(new Animated.Value(0)).current;
   const impulseY = useRef(new Animated.Value(0)).current;
@@ -67,16 +73,12 @@ export default function App() {
     })();
   }, []);
 
-  // Handlers
   const openTodayDeep = useCallback(d => { triggerImpulse(); setTodayData(d); setTodayVisible(true); }, [triggerImpulse]);
   const closeTodayDeep = useCallback(() => { triggerImpulse(); setTodayVisible(false); }, [triggerImpulse]);
-
   const openChart = useCallback(d => { triggerImpulse(); setChartData(d); setChartVisible(true); }, [triggerImpulse]);
   const closeChart = useCallback(() => { triggerImpulse(); setChartVisible(false); }, [triggerImpulse]);
-
   const openCore = useCallback(d => { triggerImpulse(); setCoreData(d); setCoreVisible(true); }, [triggerImpulse]);
   const closeCore = useCallback(() => { triggerImpulse(); setCoreVisible(false); }, [triggerImpulse]);
-
   const openCompat = useCallback(() => { triggerImpulse(); setCompatVisible(true); }, [triggerImpulse]);
   const closeCompat = useCallback(() => { triggerImpulse(); setCompatVisible(false); }, [triggerImpulse]);
 
@@ -91,25 +93,36 @@ export default function App() {
         {/* Open sky */}
         <View style={s.topSpace} />
 
-        {/* Today hook */}
+        {/* ─── TODAY ─── */}
+        <SectionLabel text="today" />
         <TodaySection kundliData={KUNDLI} onOpenDeep={openTodayDeep} onImpulse={triggerImpulse} />
 
-        <View style={{ height: 50 }} />
+        {/* Media between today & chart */}
+        <SectionMedia path="sections/between_today_chart.jpg" height={220} />
+        <SectionDivider />
 
-        {/* Chart overview hook */}
+        {/* ─── CHART OVERVIEW ─── */}
+        <SectionLabel text="your chart" />
         <ChartOverviewSection kundliData={KUNDLI} onOpenChart={openChart} onImpulse={triggerImpulse} />
 
-        <View style={{ height: 50 }} />
+        {/* Media between chart & core */}
+        <SectionMedia path="sections/between_chart_core.jpg" height={200} />
+        <SectionDivider />
 
-        {/* Core chart hook — unified wheel */}
+        {/* ─── CORE CHART ─── */}
+        <SectionLabel text="the wheel" />
         <CoreChartSection kundliData={KUNDLI} onOpenChart={openCore} onImpulse={triggerImpulse} />
 
-        <View style={{ height: 50 }} />
+        {/* Media between core & compatibility */}
+        <SectionMedia path="sections/between_core_compat.jpg" height={240} />
+        <SectionDivider />
 
-        {/* Compatibility hook */}
-        <CompatibilitySection onOpen={openCompat} onImpulse={triggerImpulse} />
+        {/* ─── COMPATIBILITY ─── */}
+        <SectionLabel text="compatibility" />
+        <CompatibilitySection kundliData={KUNDLI} onOpen={openCompat} onImpulse={triggerImpulse} />
 
-        <View style={{ height: 120 }} />
+        {/* Bottom breathing space */}
+        <View style={{ height: 160 }} />
       </Animated.ScrollView>
 
       {/* ─── MODALS ─── */}
@@ -127,4 +140,27 @@ const s = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { flexGrow: 1 },
   topSpace: { height: SH * 0.42 },
+
+  // Section label — tiny, muted, uppercase
+  sectionLabel: {
+    fontSize: 8,
+    letterSpacing: 4,
+    color: W(0.1),
+    fontWeight: '400',
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+
+  // Divider between sections
+  divider: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  divLine: {
+    width: 1,
+    height: 40,
+    backgroundColor: W(0.04),
+  },
 });
