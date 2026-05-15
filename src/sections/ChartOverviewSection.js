@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import SectionLabel from '../components/SectionLabel';
 
 const W = a => `rgba(255,255,255,${a})`;
 const API = 'https://api.plutto.space/api/public';
@@ -86,6 +87,7 @@ export default function ChartOverviewSection({ kundliData, language = 'en', onOp
 
   return (
     <Animated.View style={[s.container, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+      <SectionLabel text="your chart" secret={data.secret} />
       <Text style={s.hookTitle}>{data.hook_title}</Text>
       <Text style={s.hookBody}>{data.hook_body}</Text>
       <CTA text={data.cta_dive} onPress={() => { if (onImpulse) onImpulse(); if (onOpenChart) onOpenChart(data); }} />

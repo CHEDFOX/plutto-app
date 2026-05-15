@@ -1,15 +1,14 @@
 /**
  * COMPATIBILITY SECTION — Main scroll hook.
- * Fetches persuasive heading from backend. 7-day cache.
+ * Fetches persuasive heading from backend. Cached via dataCache (STATIC).
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import dataCache, { CACHE_POLICY } from '../cache/dataCache';
+import SectionLabel from '../components/SectionLabel';
 
 const W = a => `rgba(255,255,255,${a})`;
 const API = 'https://api.plutto.space/api/public';
-const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-const REFRESH_AT = 6 * 24 * 60 * 60 * 1000;
 
 function CTA({ text, onPress }) {
   const breathe = useRef(new Animated.Value(0.08)).current;
@@ -33,6 +32,7 @@ export default function CompatibilitySection({ kundliData, onOpen, onImpulse }) 
   const [data, setData] = useState(null);
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(20)).current;
+  const registered = useRef(false);
 
   const fetchHook = useCallback(async () => {
     const res = await fetch(`${API}/compatibility-hook`, {
@@ -40,33 +40,21 @@ export default function CompatibilitySection({ kundliData, onOpen, onImpulse }) 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kundli_data: kundliData }),
     });
-    return await res.json();
+    const json = await res.json();
+    if (!json?.hook_title) throw new Error('Invalid compatibility-hook response');
+    return json;
   }, [kundliData]);
 
   useEffect(() => {
     if (!kundliData) return;
-    const bd = kundliData?.raw?.birth_details || {};
-    const ck = `compat_hook_${bd.year}_${bd.month}_${bd.day}`;
-
     (async () => {
-      try {
-        const cached = await AsyncStorage.getItem(ck);
-        if (cached) {
-          const { data: cd, ts } = JSON.parse(cached);
-          const age = Date.now() - ts;
-          if (cd?.hook_title && age < CACHE_TTL) {
-            setData(cd);
-            if (age > REFRESH_AT) fetchHook().then(f => { if (f?.hook_title) { setData(f); AsyncStorage.setItem(ck, JSON.stringify({ data: f, ts: Date.now() })); } }).catch(() => {});
-            return;
-          }
-        }
-        const fresh = await fetchHook();
-        setData(fresh);
-        if (fresh?.hook_title) AsyncStorage.setItem(ck, JSON.stringify({ data: fresh, ts: Date.now() }));
-      } catch (e) {
-        try { const f = await fetchHook(); setData(f); } catch (_) {}
-      }
+      const result = await dataCache.getOrFetch('compatibility-hook', kundliData, fetchHook, CACHE_POLICY.STATIC);
+      if (result?.data) setData(result.data);
     })();
+    if (!registered.current) {
+      registered.current = true;
+      dataCache.register('compatibility-hook', kundliData, fetchHook, CACHE_POLICY.STATIC);
+    }
   }, [kundliData]);
 
   useEffect(() => {
@@ -82,6 +70,7 @@ export default function CompatibilitySection({ kundliData, onOpen, onImpulse }) 
 
   return (
     <Animated.View style={[s.container, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+      <SectionLabel text="compatibility" secret={data.secret} />
       <Text style={s.hookTitle}>{data.hook_title}</Text>
       <Text style={s.hookBody}>{data.hook_body}</Text>
       <CTA text={data.cta_dive} onPress={() => { if (onImpulse) onImpulse(); if (onOpen) onOpen(); }} />

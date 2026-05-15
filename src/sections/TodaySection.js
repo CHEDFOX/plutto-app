@@ -1,17 +1,15 @@
 /**
  * TODAY SECTION — Main scroll hook.
- * Fetches 7-day bundle, caches it, shows today's reading.
+ * Fetches 7-day bundle, caches via dataCache, shows today's reading.
  * Day 6: background refresh. Zero loading after first fetch.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import dataCache, { CACHE_POLICY } from '../cache/dataCache';
+import SectionLabel from '../components/SectionLabel';
 
 const W = a => `rgba(255,255,255,${a})`;
 const API = 'https://api.plutto.space/api/public';
-const CACHE_KEY_PREFIX = 'today_7d_';
-const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-const REFRESH_AT = 6 * 24 * 60 * 60 * 1000;
 
 function todayKey() {
   const d = new Date();
@@ -41,6 +39,7 @@ export default function TodaySection({ kundliData, language = 'en', onOpenDeep, 
   const [bundle, setBundle] = useState(null);
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(20)).current;
+  const registered = useRef(false);
 
   const fetchBundle = useCallback(async () => {
     const res = await fetch(`${API}/today-deep`, {
@@ -48,53 +47,33 @@ export default function TodaySection({ kundliData, language = 'en', onOpenDeep, 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kundli_data: kundliData, language }),
     });
-    return await res.json();
+    const json = await res.json();
+    if (!json?.days) throw new Error('Invalid today-deep response');
+    return json;
   }, [kundliData, language]);
 
   useEffect(() => {
     if (!kundliData) return;
-    const bd = kundliData?.raw?.birth_details || {};
-    const cacheKey = CACHE_KEY_PREFIX + `${bd.year}_${bd.month}_${bd.day}`;
     const tk = todayKey();
 
     (async () => {
-      try {
-        const cached = await AsyncStorage.getItem(cacheKey);
-        if (cached) {
-          const { data, ts } = JSON.parse(cached);
-          const age = Date.now() - ts;
-          const days = data?.days || {};
-          // Check if today's reading exists in cache
-          if (days[tk] && age < CACHE_TTL) {
-            setBundle(data);
-            setTodayReading(days[tk]);
-            // Background refresh if past day 6
-            if (age > REFRESH_AT) {
-              fetchBundle().then(fresh => {
-                setBundle(fresh);
-                const fd = fresh?.days || {};
-                if (fd[tk]) setTodayReading(fd[tk]);
-                AsyncStorage.setItem(cacheKey, JSON.stringify({ data: fresh, ts: Date.now() }));
-              }).catch(() => {});
-            }
-            return;
-          }
-        }
-        // No valid cache or today missing — fetch fresh
-        const fresh = await fetchBundle();
-        setBundle(fresh);
-        const fd = fresh?.days || {};
-        setTodayReading(fd[tk] || Object.values(fd)[0] || null);
-        AsyncStorage.setItem(cacheKey, JSON.stringify({ data: fresh, ts: Date.now() }));
-      } catch (e) {
-        try {
-          const fresh = await fetchBundle();
-          setBundle(fresh);
-          const fd = fresh?.days || {};
-          setTodayReading(fd[tk] || Object.values(fd)[0] || null);
-        } catch (_) {}
+      let result = await dataCache.getOrFetch('today-deep', kundliData, fetchBundle, CACHE_POLICY.STATIC);
+      let data = result?.data;
+      if (data && result.fromCache && !(data.days || {})[tk]) {
+        await dataCache.invalidate('today-deep', kundliData);
+        result = await dataCache.getOrFetch('today-deep', kundliData, fetchBundle, CACHE_POLICY.STATIC);
+        data = result?.data;
       }
+      if (!data) return;
+      const days = data.days || {};
+      setBundle(data);
+      setTodayReading(days[tk] || Object.values(days)[0] || null);
     })();
+
+    if (!registered.current) {
+      registered.current = true;
+      dataCache.register('today-deep', kundliData, fetchBundle, CACHE_POLICY.STATIC);
+    }
   }, [kundliData]);
 
   useEffect(() => {
@@ -110,13 +89,13 @@ export default function TodaySection({ kundliData, language = 'en', onOpenDeep, 
 
   return (
     <Animated.View style={[s.container, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+      <SectionLabel text="today" secret={todayReading.secret} />
       <Text style={s.hookTitle}>{todayReading.hook_title}</Text>
       <Text style={s.hookBody}>{todayReading.hook_body}</Text>
       <CTA
         text={todayReading.cta_dive}
         onPress={() => {
           if (onImpulse) onImpulse();
-          // Pass today's reading + full bundle for the deep screen
           if (onOpenDeep) onOpenDeep({ reading: todayReading, days: bundle?.days });
         }}
       />

@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import SectionLabel from '../components/SectionLabel';
 
 const W = a => `rgba(255,255,255,${a})`;
 const GOLD = '#D4AF37';
@@ -85,9 +86,11 @@ export default function CoreChartSection({ kundliData, onOpenChart, onImpulse })
   const hookTitle = readings.hook_title || 'Five mirrors. One you.';
   const hookBody = readings.hook_body || 'Your chart holds patterns that no single system can fully see. Together, they reveal what you already sense but haven\'t named.';
   const ctaDive = readings.cta_dive || 'Open the wheel';
+  const secret = readings.secret || readings?.vedic?.secret || '';
 
   return (
     <Animated.View style={[s.container, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+      <SectionLabel text="the wheel" secret={secret} />
       <Text style={s.hookTitle}>{hookTitle}</Text>
       <Text style={s.hookBody}>{hookBody}</Text>
       <CTA text={ctaDive} onPress={() => { if (onImpulse) onImpulse(); if (onOpenChart) onOpenChart(data); }} />
