@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jyotish.app",
       "buildNumber": "1",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Jyotish AI needs microphone access for voice conversations with the Oracle.",
         "UIBackgroundModes": [
@@ -39,6 +40,7 @@
     },
     "plugins": [
       "expo-secure-store",
+      "expo-apple-authentication",
       [
         "expo-av",
         {
@@ -47,7 +49,8 @@
       ],
       "expo-font",
       "expo-localization",
-      "expo-video"
+      "expo-video",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

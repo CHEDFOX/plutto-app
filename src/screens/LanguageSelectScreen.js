@@ -1,178 +1,175 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions, ScrollView } from 'react-native';
 import * as Localization from 'expo-localization';
 import { colors, spacing } from '../theme';
 import * as Haptics from 'expo-haptics';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SH } = Dimensions.get('window');
 
-// Expanded greeting pool — covers most device languages a user could install with.
-// The 6 supported app languages are still the only options at the bottom.
-const GREETINGS = [
-  // Core 6 (always in rotation)
-  { text: 'नमस्ते', lang: 'hi' },
-  { text: 'Hello', lang: 'en' },
-  { text: '你好', lang: 'zh' },
-  { text: 'Hola', lang: 'es' },
-  { text: 'Olá', lang: 'pt' },
-  { text: 'こんにちは', lang: 'ja' },
+const ARRIVAL_HOLD_MS = 2500;
+const ARRIVAL_MOVE_MS = 1200;
+const ROTATION_INTERVAL_MS = 2500;
+const ROTATION_FADE_MS = 280;
 
-  // Indian regional (high-leverage for your market)
-  { text: 'নমস্কার', lang: 'bn' },
-  { text: 'வணக்கம்', lang: 'ta' },
-  { text: 'నమస్కారం', lang: 'te' },
-  { text: 'ನಮಸ್ಕಾರ', lang: 'kn' },
-  { text: 'നമസ്കാരം', lang: 'ml' },
-  { text: 'નમસ્તે', lang: 'gu' },
-  { text: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ', lang: 'pa' },
-  { text: 'नमस्कार', lang: 'mr' },
-  { text: 'ନମସ୍କାର', lang: 'or' },
-  { text: 'السلام علیکم', lang: 'ur' },
+const GREETING_CENTER_Y = SH * 0.40;
+const GREETING_TOP_Y = SH * 0.10;
+const LIST_TOP = SH * 0.36;
+const LIST_BOTTOM = SH * 0.06;
 
-  // European
-  { text: 'Bonjour', lang: 'fr' },
-  { text: 'Hallo', lang: 'de' },
-  { text: 'Ciao', lang: 'it' },
-  { text: 'Hallo', lang: 'nl' },
-  { text: 'Hej', lang: 'sv' },
-  { text: 'Hei', lang: 'no' },
-  { text: 'Hej', lang: 'da' },
-  { text: 'Terve', lang: 'fi' },
-  { text: 'Cześć', lang: 'pl' },
-  { text: 'Ahoj', lang: 'cs' },
-  { text: 'Γεια', lang: 'el' },
-  { text: 'Привет', lang: 'ru' },
-  { text: 'Привіт', lang: 'uk' },
-  { text: 'Merhaba', lang: 'tr' },
-  { text: 'Salut', lang: 'ro' },
-  { text: 'Szia', lang: 'hu' },
+function orderLanguages(list, deviceLang, deviceRegion) {
+  if (!list?.length) return [];
+  const matches = [];
+  const cluster = [];
+  const rest = [];
+  list.forEach((l) => {
+    if (l.code === deviceLang) matches.push(l);
+    else if (deviceRegion && Array.isArray(l.regions) && l.regions.includes(deviceRegion)) cluster.push(l);
+    else rest.push(l);
+  });
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+  return [...matches, ...cluster, ...rest];
+}
 
-  // Middle East / Africa
-  { text: 'مرحبا', lang: 'ar' },
-  { text: 'שלום', lang: 'he' },
-  { text: 'سلام', lang: 'fa' },
-  { text: 'Habari', lang: 'sw' },
-
-  // East / Southeast Asia
-  { text: '안녕하세요', lang: 'ko' },
-  { text: 'Xin chào', lang: 'vi' },
-  { text: 'สวัสดี', lang: 'th' },
-  { text: 'Halo', lang: 'id' },
-  { text: 'Helo', lang: 'ms' },
-  { text: 'Kamusta', lang: 'tl' },
-];
-
-const LANGUAGES = [
-  { code: 'en', name: 'English' },
-  { code: 'hi', name: 'हिंदी' },
-  { code: 'zh', name: '中文' },
-  { code: 'es', name: 'Español' },
-  { code: 'pt', name: 'Português' },
-  { code: 'ja', name: '日本語' },
-];
-
-export default function LanguageSelectScreen({ onSelect }) {
-  // Reorder greetings so the user's detected device language shows FIRST.
-  // Falls back gracefully if their language isn't in the pool.
-  const orderedGreetings = useMemo(() => {
-    const deviceLang = Localization.getLocales()?.[0]?.languageCode || 'en';
-    const matchIndex = GREETINGS.findIndex(g => g.lang === deviceLang);
-    if (matchIndex === -1) return GREETINGS;
-    return [GREETINGS[matchIndex], ...GREETINGS.filter((_, i) => i !== matchIndex)];
-  }, []);
-
+export default function LanguageSelectScreen({ bundle, onSelect }) {
+  const [arrivalDone, setArrivalDone] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const greetingFade = useState(new Animated.Value(1))[0];
+
+  const deviceLang = useMemo(() => Localization.getLocales()?.[0]?.languageCode || 'en', []);
+  const deviceRegion = useMemo(() => Localization.getLocales()?.[0]?.regionCode || '', []);
+
+  const orderedLanguages = useMemo(
+    () => orderLanguages(bundle?.languages, deviceLang, deviceRegion),
+    [bundle, deviceLang, deviceRegion],
+  );
+
+  const arrival = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!orderedLanguages.length || arrivalDone) return;
+    const t = setTimeout(() => {
+      Animated.timing(arrival, {
+        toValue: 1,
+        duration: ARRIVAL_MOVE_MS,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: true,
+      }).start(() => setArrivalDone(true));
+    }, ARRIVAL_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [orderedLanguages.length, arrivalDone]);
+
+  const greetingFade = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
+    Animated.timing(greetingFade, {
       toValue: 1,
-      duration: 600,
+      duration: ROTATION_FADE_MS,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [currentIndex]);
 
   useEffect(() => {
+    if (!arrivalDone || orderedLanguages.length < 2) return;
     const interval = setInterval(() => {
       Animated.timing(greetingFade, {
         toValue: 0,
-        duration: 250,
+        duration: ROTATION_FADE_MS,
         useNativeDriver: true,
-      }).start(() => {
-        setCurrentIndex(prev => (prev + 1) % orderedGreetings.length);
-        Animated.timing(greetingFade, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }).start();
+      }).start(({ finished }) => {
+        if (finished) {
+          setCurrentIndex((prev) => (prev + 1) % orderedLanguages.length);
+        }
       });
-    }, 2000);
-
+    }, ROTATION_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [orderedGreetings.length]);
+  }, [arrivalDone, orderedLanguages.length]);
 
-  const handleSelect = (langCode) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleSelect = useCallback((langCode) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     if (onSelect) onSelect(langCode);
-  };
+  }, [onSelect]);
+
+  if (!orderedLanguages.length) {
+    return <View style={styles.container} />;
+  }
+
+  const greetingTranslateY = arrival.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, GREETING_TOP_Y - GREETING_CENTER_Y],
+  });
+
+  const listOpacity = arrival.interpolate({
+    inputRange: [0, 0.55, 1],
+    outputRange: [0, 0, 1],
+  });
+
+  const greeting = orderedLanguages[currentIndex]?.greeting || '';
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        {/* Greeting */}
-        <Animated.Text style={[styles.greeting, { opacity: greetingFade }]}>
-          {orderedGreetings[currentIndex].text}
-        </Animated.Text>
+      <Animated.Text
+        style={[
+          styles.greeting,
+          {
+            top: GREETING_CENTER_Y,
+            opacity: greetingFade,
+            transform: [{ translateY: greetingTranslateY }],
+          },
+        ]}
+      >
+        {greeting}
+      </Animated.Text>
 
-        {/* Language boxes */}
-        <View style={styles.languageContainer}>
-          <View style={styles.languageGrid}>
-            {LANGUAGES.map((lang) => (
-              <TouchableOpacity
-                key={lang.code}
-                style={styles.langBox}
-                onPress={() => handleSelect(lang.code)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.langText}>{lang.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+      <Animated.View
+        style={[styles.listContainer, { opacity: listOpacity }]}
+        pointerEvents={arrivalDone ? 'auto' : 'none'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.listGrid}
+          showsVerticalScrollIndicator={false}
+        >
+          {orderedLanguages.map((lang) => (
+            <TouchableOpacity
+              key={lang.code}
+              style={styles.langBox}
+              onPress={() => handleSelect(lang.code)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.langText}>{lang.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.void,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-  },
+  container: { flex: 1, backgroundColor: colors.void },
   greeting: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     fontSize: 52,
     fontWeight: '300',
     color: colors.white,
     textAlign: 'center',
-    marginTop: SCREEN_HEIGHT * 0.28,
     letterSpacing: 0,
   },
-  languageContainer: {
+  listContainer: {
     position: 'absolute',
-    bottom: 80,
+    top: LIST_TOP,
+    bottom: LIST_BOTTOM,
     left: spacing.lg,
     right: spacing.lg,
   },
-  languageGrid: {
+  listGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: spacing.sm,
+    paddingBottom: spacing.lg,
   },
   langBox: {
     width: 105,

@@ -54,8 +54,10 @@ export const generateKundli = async (userData, birthData) => {
     const response = await fetch(`${API_BASE_URL}/api/public/kundli/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+            body: JSON.stringify({
         name: userData?.name || 'User',
+        gender: userData?.gender || birthData?.gender || null,
+        language: userData?.language || 'en',
         date: { day: parseInt(birthData?.date?.day) || 1, month: birthData?.date?.monthIndex || 1, year: parseInt(birthData?.date?.year) || 2000 },
         time: { hour: parseInt(birthData?.time?.hour) || 12, minute: parseInt(birthData?.time?.minute) || 0 },
         place: { name: birthData?.place?.name || 'New Delhi', lat: birthData?.place?.lat || 28.6139, lng: birthData?.place?.lng || 77.2090 },
